@@ -1,0 +1,43 @@
+# Flutter/Dart
+.dart_tool/
+.packages
+.pub-cache/
+build/
+.flutter-plugins
+.flutter-plugins-dependencies
+.melos_tool/
+
+# Android
+android/.gradle/
+android/.idea/
+android/local.properties
+android/**/build/
+android/**/captures/
+*.keystore
+*.jks
+
+# iOS
+ios/Pods/
+ios/.symlinks/
+ios/Flutter/Flutter.framework
+ios/Flutter/Flutter.podspec
+ios/**/build/
+*.xcworkspace
+*.xcuserdatad/
+*.lock
+
+# macOS
+macos/**/build/
+macos/Pods/
+
+# Web
+web/.dart_tool/
+web/build/
+
+# VSCode / IntelliJ
+.vscode/
+.idea/
+
+# Others
+*.log
+*.tmp
