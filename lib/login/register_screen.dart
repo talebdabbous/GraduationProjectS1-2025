@@ -158,8 +158,9 @@ class _RegisterScreenState extends State<RegisterScreen> {
         actions: [
           TextButton(
             onPressed: () {
-              Navigator.pop(context); 
-              Navigator.pushReplacementNamed(context, '/'); 
+              Navigator.pop(context);
+              //Navigator.of(context).pushNamedAndRemoveUntil('/ask_level', (route) => false);
+              Navigator.pushReplacementNamed(context, '/ask_level');
             },
             child: const Text("Continue"),
           ),
