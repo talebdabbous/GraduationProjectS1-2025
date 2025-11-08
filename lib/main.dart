@@ -4,6 +4,7 @@ import 'login/login_screen.dart';
 import 'login/register_screen.dart';
 import 'login/forgot_password_screen.dart';
 import 'level_exam/ask.dart';
+import 'level_exam/level_exam.dart';
 
 void main() {
   runApp(const MyApp());
@@ -27,7 +28,8 @@ class MyApp extends StatelessWidget {
         '/login': (_) => const LoginScreen(),
         '/register': (_) => const RegisterScreen(),
         '/forgot': (_) => const ForgotPasswordScreen(),
-        '/ask_level': (_) => const StartLevelPage(),
+        '/ask_level': (_) => const StartLevelPage(), // صفحة السؤال
+        '/level_exam': (_) => LevelExamPage(), // صفحة الامتحان
       },
     );
   }

@@ -3,6 +3,8 @@ import 'package:flutter/material.dart';
 class StartLevelPage extends StatelessWidget {
   const StartLevelPage({super.key});
 
+  static const Color kBlue = Color(0xFF1E88E5); // درجة الأزرق للأزرار
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -19,7 +21,7 @@ class StartLevelPage extends StatelessWidget {
             ),
           ),
 
-          // طبقة شفافة خفيفة لتحسين القراءة
+          // طبقة شفافية خفيفة لتحسين القراءة
           Container(color: Colors.black26),
 
           // المحتوى
@@ -44,43 +46,41 @@ class StartLevelPage extends StatelessWidget {
                   const Text(
                     "Would you like to take a quick placement test\nor start learning from the beginning?",
                     textAlign: TextAlign.center,
-                    style: TextStyle(fontSize: 16, color: Colors.white70),
+                    style: TextStyle(fontSize: 16, color: Colors.white70, height: 1.3),
                   ),
 
+                  // يدفع الأزرار للمنتصف
                   const Spacer(),
 
-                  // زر أبيض بخط أزرق (Login style)
+                  // الزر الأول: أبيض بخط أزرق → يفتح صفحة الامتحان
                   SizedBox(
                     width: double.infinity,
                     child: ElevatedButton(
                       style: ElevatedButton.styleFrom(
-                        backgroundColor: Colors.white, // خلفية بيضاء
-                        foregroundColor: const Color(0xFF1E88E5), // خط أزرق
+                        backgroundColor: Colors.white,
+                        foregroundColor: kBlue,
                         elevation: 0,
                         shape: RoundedRectangleBorder(
                           borderRadius: BorderRadius.circular(12),
                         ),
                         padding: const EdgeInsets.symmetric(vertical: 14),
                       ),
-                      onPressed: () => Navigator.pushReplacementNamed(context, '/placement'),
+                      onPressed: () => Navigator.pushReplacementNamed(context, '/level_exam'),
                       child: const Text(
                         "Take Placement Test",
-                        style: TextStyle(
-                          fontWeight: FontWeight.bold,
-                          fontSize: 16,
-                        ),
+                        style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
                       ),
                     ),
                   ),
                   const SizedBox(height: 12),
 
-                  // زر أزرق بخط أبيض (Register style)
+                  // الزر الثاني: أزرق بخط أبيض → يبدأ من الصفر
                   SizedBox(
                     width: double.infinity,
                     child: ElevatedButton(
                       style: ElevatedButton.styleFrom(
-                        backgroundColor: const Color(0xFF1E88E5), // أزرق جميل
-                        foregroundColor: Colors.white, // خط أبيض
+                        backgroundColor: kBlue,
+                        foregroundColor: Colors.white,
                         elevation: 0,
                         shape: RoundedRectangleBorder(
                           borderRadius: BorderRadius.circular(12),
@@ -90,14 +90,12 @@ class StartLevelPage extends StatelessWidget {
                       onPressed: () => Navigator.pushReplacementNamed(context, '/start_zero'),
                       child: const Text(
                         "Start from Zero",
-                        style: TextStyle(
-                          fontWeight: FontWeight.bold,
-                          fontSize: 16,
-                        ),
+                        style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
                       ),
                     ),
                   ),
 
+                  // يثبت الأزرار بالنص
                   const Spacer(),
                 ],
               ),
