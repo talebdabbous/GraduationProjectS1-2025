@@ -1,4 +1,7 @@
 import 'package:flutter/material.dart';
+import '../services/auth_service.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -13,6 +16,63 @@ class _LoginScreenState extends State<LoginScreen> {
   bool isLoading = false;
   bool obscure = true;
 
+  Future<void> _login() async {
+    setState(() => isLoading = true);
+
+    final result = await AuthService.loginUser(
+      email: email.text.trim(),
+      password: password.text.trim(),
+    );
+
+    setState(() => isLoading = false);
+   
+
+    if (result['success']) {
+      //======================================= مؤقت ==========================
+        Navigator.pushReplacementNamed(context, '/ask_level');
+    //======================================= مؤقت ==========================
+  //     final token = result['data']['token'];
+  //     // 🧠 حفظ التوكن
+  // final prefs = await SharedPreferences.getInstance();
+  // await prefs.setString('token', token);
+
+  //     print("✅ oken saved locally: $token");
+
+  //     ScaffoldMessenger.of(context).showSnackBar(
+  //       SnackBar(
+  //         content: const Text(
+  //           "✅ Logged in successfully!",
+  //           style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
+  //         ),
+  //         backgroundColor: const Color(0xFF219EBC),
+  //         behavior: SnackBarBehavior.floating,
+  //         margin: const EdgeInsets.all(16),
+  //         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+  //         duration: const Duration(seconds: 2),
+  //       ),
+  //     );
+
+  //     // بعد تسجيل الدخول بنجاح، انتقل للصفحة التالية (مثلاً /)
+  //     Navigator.pushReplacementNamed(context, '/ask_level');
+    } else {
+      // لو في خطأ (إيميل أو كلمة سر غلط)
+      showDialog(
+        context: context,
+        builder: (_) => AlertDialog(
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+          title: const Text("⚠️ Login Failed"),
+          content: Text(result['message'] ?? "Invalid email or password"),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text("OK"),
+            ),
+          ],
+        ),
+      );
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -20,7 +80,7 @@ class _LoginScreenState extends State<LoginScreen> {
         fit: StackFit.expand,
         children: [
           Image.asset('assets/images/welcome_bg.png', fit: BoxFit.cover),
-          Container(color: Colors.black.withOpacity(0.25)), 
+          Container(color: Colors.black.withOpacity(0.25)),
 
           SafeArea(
             child: Center(
@@ -122,7 +182,7 @@ class _LoginScreenState extends State<LoginScreen> {
                             ],
                           ),
                           TextButton(
-                            onPressed: () => Navigator.pushReplacementNamed(context, '/'),
+                            onPressed: () => Navigator.pushReplacementNamed(context, '/welcome'),
                             child: const Text("Back"),
                           ),
                         ],
@@ -137,58 +197,4 @@ class _LoginScreenState extends State<LoginScreen> {
       ),
     );
   }
-
-  void _login() {
-    setState(() => isLoading = true);
-    Future.delayed(const Duration(seconds: 2), () {
-      setState(() => isLoading = false);
-      // ScaffoldMessenger.of(context).showSnackBar(
-      //   const SnackBar(content: Text("Logged in")),
-      // );
-      ScaffoldMessenger.of(context).showSnackBar(
-  SnackBar(
-    content: const Text(
-      "✅ Logged in successfully!",
-      style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
-    ),
-    backgroundColor: const Color(0xFF219EBC),
-    behavior: SnackBarBehavior.floating,
-    margin: const EdgeInsets.all(16),
-    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-    duration: const Duration(seconds: 2),
-  ),
-);
-    });
-  }
-// void _login() {
-//   setState(() => isLoading = true);
-
-//   Future.delayed(const Duration(seconds: 2), () {
-//     setState(() => isLoading = false);
-
-//     showDialog(
-//       context: context,
-//       builder: (_) => AlertDialog(
-//         shape: RoundedRectangleBorder(
-//           borderRadius: BorderRadius.circular(16),
-//         ),
-//         title: const Text(
-//           "✅ Success",
-//           style: TextStyle(fontWeight: FontWeight.bold),
-//         ),
-//         content: const Text("You have logged in successfully!"),
-//         actions: [
-//           TextButton(
-//             onPressed: () {
-//               Navigator.pop(context); // يسكر المربع
-//               Navigator.pushReplacementNamed(context, '/'); // يرجع للرئيسية
-//             },
-//             child: const Text("Continue"),
-//           ),
-//         ],
-//       ),
-//     );
-//   });
-// }
-
 }

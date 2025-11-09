@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
-
+import '../services/auth_service.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 class RegisterScreen extends StatefulWidget {
   const RegisterScreen({super.key});
 
@@ -119,7 +120,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
                           const SizedBox(height: 12),
                           TextButton(
                            onPressed: () {
-                           Navigator.pushReplacementNamed(context, '/');
+                           Navigator.pushReplacementNamed(context, '/welcome');
                            },
                            child: const Text("Back "),
                            ),
@@ -137,29 +138,34 @@ class _RegisterScreenState extends State<RegisterScreen> {
     );
   }
 
-  void _register() {
-    setState(() => isLoading = true);
-    Future.delayed(const Duration(seconds: 2), () {
-      setState(() => isLoading = false);
-      // ScaffoldMessenger.of(context).showSnackBar(
-      //   const SnackBar(content: Text("Account created (demo)")),
-      // );
-      showDialog(
+void _register() async {
+  setState(() => isLoading = true);
+
+  final result = await AuthService.registerUser(
+    name: name.text.trim(),
+    email: email.text.trim(),
+    password: password.text.trim(),
+  );
+
+  setState(() => isLoading = false);
+
+  if (result['success']) {
+    final token = result['data']['token'];
+      // 🧠 حفظ التوكن
+  final prefs = await SharedPreferences.getInstance();
+  await prefs.setString('token', token);
+    showDialog(
       context: context,
       builder: (_) => AlertDialog(
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(16),
         ),
-        title: const Text(
-          "✅ Success",
-          style: TextStyle(fontWeight: FontWeight.bold),
-        ),
+        title: const Text("✅ Success", style: TextStyle(fontWeight: FontWeight.bold)),
         content: const Text("Account created successfully!"),
         actions: [
           TextButton(
             onPressed: () {
               Navigator.pop(context);
-              //Navigator.of(context).pushNamedAndRemoveUntil('/ask_level', (route) => false);
               Navigator.pushReplacementNamed(context, '/ask_level');
             },
             child: const Text("Continue"),
@@ -167,8 +173,22 @@ class _RegisterScreenState extends State<RegisterScreen> {
         ],
       ),
     );
-  });
+  } else {
+    // فشل التسجيل
+    showDialog(
+      context: context,
+      builder: (_) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: const Text("⚠️ Error"),
+        content: Text(result['message'] ?? 'Registration failed'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text("OK"),
+          ),
+        ],
+      ),
+    );
+  }
 }
-//     });
-//   }
- }
+}
