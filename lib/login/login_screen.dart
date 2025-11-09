@@ -29,31 +29,31 @@ class _LoginScreenState extends State<LoginScreen> {
 
     if (result['success']) {
       //======================================= مؤقت ==========================
-        Navigator.pushReplacementNamed(context, '/ask_level');
+        // Navigator.pushReplacementNamed(context, '/ask_level');
     //======================================= مؤقت ==========================
-  //     final token = result['data']['token'];
-  //     // 🧠 حفظ التوكن
-  // final prefs = await SharedPreferences.getInstance();
-  // await prefs.setString('token', token);
+      final token = result['data']['token'];
+      // 🧠 حفظ التوكن
+  final prefs = await SharedPreferences.getInstance();
+  await prefs.setString('token', token);
 
-  //     print("✅ oken saved locally: $token");
+      print("✅ oken saved locally: $token");
 
-  //     ScaffoldMessenger.of(context).showSnackBar(
-  //       SnackBar(
-  //         content: const Text(
-  //           "✅ Logged in successfully!",
-  //           style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
-  //         ),
-  //         backgroundColor: const Color(0xFF219EBC),
-  //         behavior: SnackBarBehavior.floating,
-  //         margin: const EdgeInsets.all(16),
-  //         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-  //         duration: const Duration(seconds: 2),
-  //       ),
-  //     );
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: const Text(
+            "✅ Logged in successfully!",
+            style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
+          ),
+          backgroundColor: const Color(0xFF219EBC),
+          behavior: SnackBarBehavior.floating,
+          margin: const EdgeInsets.all(16),
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+          duration: const Duration(seconds: 2),
+        ),
+      );
 
-  //     // بعد تسجيل الدخول بنجاح، انتقل للصفحة التالية (مثلاً /)
-  //     Navigator.pushReplacementNamed(context, '/ask_level');
+      // بعد تسجيل الدخول بنجاح، انتقل للصفحة التالية (مثلاً /)
+      Navigator.pushReplacementNamed(context, '/ask_level');
     } else {
       // لو في خطأ (إيميل أو كلمة سر غلط)
       showDialog(
