@@ -87,7 +87,7 @@ class StartLevelPage extends StatelessWidget {
                         ),
                         padding: const EdgeInsets.symmetric(vertical: 14),
                       ),
-                      onPressed: () => Navigator.pushReplacementNamed(context, '/start_zero'),
+                      onPressed: () => Navigator.pushReplacementNamed(context, '/home_screen'),
                       child: const Text(
                         "Start from Zero",
                         style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),

@@ -349,7 +349,7 @@ class _LoginScreenState extends State<LoginScreen> {
                             ],
                           ),
                           TextButton(
-                            onPressed: () => Navigator.pushReplacementNamed(context, '/welcome'),
+                            onPressed: () => Navigator.pushReplacementNamed(context, '/home_screen'),
                             child: const Text("Back"),
                           ),
                         ],

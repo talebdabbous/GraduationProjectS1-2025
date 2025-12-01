@@ -5,7 +5,8 @@ import 'package:http/http.dart' as http;
 class AuthService {
   /// على المحاكي: 10.0.2.2
   /// على جهاز حقيقي: غيّرها إلى IP اللابتوب (مثلاً 192.168.1.10)
-  static const String _base = 'http://10.0.2.2:4000/api/auth';
+ static const String _base = 'http://10.0.2.2:4000/api/auth';
+// static const String _base = 'https://graduationprojects1-2025-backend.onrender.com/api/auth';
 
   // ===== Helpers =====
   static dynamic _json(String s) {
