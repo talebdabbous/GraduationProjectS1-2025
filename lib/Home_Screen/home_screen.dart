@@ -157,25 +157,32 @@ class _HomeScreenState extends State<HomeScreen> {
 
       // ---------------- BOTTOM NAV ----------------
       bottomNavigationBar: BottomNavigationBar(
-  currentIndex: _index,
-  selectedItemColor: primary,
-  unselectedItemColor: Colors.grey,
-  type: BottomNavigationBarType.fixed,
-  onTap: (i) {
-    setState(() => _index = i);
+        currentIndex: _index,
+        selectedItemColor: primary,
+        unselectedItemColor: Colors.grey,
+        type: BottomNavigationBarType.fixed,
+        onTap: (i) {
+          // لو كبسنا على Profile: افتح شاشة البروفايل وخلي الهوم يضل محدد
+          if (i == 3) {
+            setState(() => _index = 0); // تأكد إن الهوم هو المختار لما نرجع
+            Navigator.pushNamed(context, '/profile_main_screen');
+            return;
+          }
 
-    if (i == 3) {
-      Navigator.pushNamed(context, '/profile_main_screen');
-    }
-  },
-  items: const [
-    BottomNavigationBarItem(icon: Icon(Icons.home_outlined), label: "Home"),
-    BottomNavigationBarItem(icon: Icon(Icons.groups_outlined), label: "Community"),
-    BottomNavigationBarItem(icon: Icon(Icons.smart_toy_outlined), label: "Chatbot"),
-    BottomNavigationBarItem(icon: Icon(Icons.person_outline), label: "Profile"),
-  ],
-),
+          // الباقي (Home, Community, Chatbot) بس بغير الإندكس حالياً
+          setState(() => _index = i);
 
+          // لاحقاً:
+          // if (i == 1) Navigator.pushNamed(context, '/community');
+          // if (i == 2) Navigator.pushNamed(context, '/chatbot');
+        },
+        items: const [
+          BottomNavigationBarItem(icon: Icon(Icons.home_outlined), label: "Home"),
+          BottomNavigationBarItem(icon: Icon(Icons.groups_outlined), label: "Community"),
+          BottomNavigationBarItem(icon: Icon(Icons.smart_toy_outlined), label: "Chatbot"),
+          BottomNavigationBarItem(icon: Icon(Icons.person_outline), label: "Profile"),
+        ],
+      ),
     );
   }
 

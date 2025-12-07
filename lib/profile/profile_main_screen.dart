@@ -1,19 +1,17 @@
+import 'dart:io';
 import 'package:flutter/material.dart';
+import 'package:image_picker/image_picker.dart';
 
 class ProfileScreen extends StatefulWidget {
-  final String userName;
+  final String name;
   final String email;
-  final int dailyStreak;
-  final int points;
-  final String currentLevel;
+  final String level;
 
   const ProfileScreen({
     super.key,
-    required this.userName,
+    required this.name,
     required this.email,
-    required this.dailyStreak,
-    required this.points,
-    required this.currentLevel,
+    required this.level,
   });
 
   @override
@@ -21,432 +19,316 @@ class ProfileScreen extends StatefulWidget {
 }
 
 class _ProfileScreenState extends State<ProfileScreen> {
-  bool _isEditing = false;
-  bool _notificationsEnabled = true;
-  bool _soundEnabled = true;
+  int _index = 3;
+  File? _profileImage;
 
-  late TextEditingController _nameController;
-  late TextEditingController _usernameController;
-  late TextEditingController _emailController;
-  late TextEditingController _dailyGoalController;
-  late String _selectedLevel;
-
-  @override
-  void initState() {
-    super.initState();
-    _nameController = TextEditingController(text: widget.userName);
-    _usernameController = TextEditingController(text: widget.userName.toLowerCase());
-    _emailController = TextEditingController(text: widget.email);
-    _dailyGoalController = TextEditingController(text: "15"); // minutes per day (sample)
-    _selectedLevel = widget.currentLevel; // e.g. "Beginner A1"
-  }
-
-  @override
-  void dispose() {
-    _nameController.dispose();
-    _usernameController.dispose();
-    _emailController.dispose();
-    _dailyGoalController.dispose();
-    super.dispose();
-  }
-
-  void _toggleEdit() {
-    setState(() {
-      // لو كان بيسيف، هون بتحط كول للباك إند بنفس المكان (TODO)
-      _isEditing = !_isEditing;
-    });
-  }
-
-  void _logout() {
-    // TODO: هنا بتحط منطق تسجيل الخروج الحقيقي
-    // مثال:
-    // 1. مسح التوكن من الذاكرة
-    // 2. Navigator.pushNamedAndRemoveUntil(context, '/login', (_) => false);
-
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text("Logged out ( demo only )")),
+  // ========================= تغيير الصورة =========================
+  Future<void> _changeProfilePhoto() async {
+    showModalBottomSheet(
+      context: context,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (ctx) {
+        return SafeArea(
+          child: SizedBox(
+            height: 180,
+            child: Column(
+              children: [
+                const SizedBox(height: 10),
+                Container(
+                  width: 40,
+                  height: 4,
+                  decoration: BoxDecoration(
+                    color: Colors.grey.shade300,
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                ),
+                const SizedBox(height: 20),
+                ListTile(
+                  leading: const Icon(Icons.photo_library),
+                  title: const Text("Choose from Gallery"),
+                  onTap: () async {
+                    final picked = await ImagePicker().pickImage(
+                      source: ImageSource.gallery,
+                    );
+                    if (picked != null) {
+                      setState(() => _profileImage = File(picked.path));
+                    }
+                    Navigator.pop(context);
+                  },
+                ),
+                ListTile(
+                  leading: const Icon(Icons.camera_alt),
+                  title: const Text("Take a Photo"),
+                  onTap: () async {
+                    final picked = await ImagePicker().pickImage(
+                      source: ImageSource.camera,
+                    );
+                    if (picked != null) {
+                      setState(() => _profileImage = File(picked.path));
+                    }
+                    Navigator.pop(context);
+                  },
+                ),
+              ],
+            ),
+          ),
+        );
+      },
     );
   }
+
+  // =================================================================
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final primary = theme.colorScheme.primary;
+    final screenHeight = MediaQuery.of(context).size.height;
 
     return Scaffold(
+      backgroundColor: const Color(0xFFF3F5F7),
+
       appBar: AppBar(
-        title: const Text("Profile"),
+        automaticallyImplyLeading: false,
         centerTitle: true,
-        backgroundColor: primary,
-        foregroundColor: Colors.white,
+        elevation: 0,
+        backgroundColor: const Color(0xFFF3F5F7),
+        title: const Text(
+          "Profile",
+          style: TextStyle(
+            fontWeight: FontWeight.w600,
+          ),
+        ),
       ),
-      backgroundColor: Colors.grey.shade100,
 
       body: SafeArea(
         child: SingleChildScrollView(
           physics: const BouncingScrollPhysics(),
-          child: Padding(
-            padding: const EdgeInsets.all(16),
-            child: Column(
-              children: [
-                // ----------- HEADER CARD -----------
-                Container(
-                  width: double.infinity,
-                  padding: const EdgeInsets.all(18),
-                  decoration: BoxDecoration(
-                    borderRadius: BorderRadius.circular(18),
-                    gradient: LinearGradient(
-                      colors: [
-                        primary,
-                        primary.withOpacity(0.75),
-                      ],
-                      begin: Alignment.topLeft,
-                      end: Alignment.bottomRight,
-                    ),
-                    boxShadow: [
-                      BoxShadow(
-                        blurRadius: 12,
-                        color: primary.withOpacity(0.35),
-                        offset: const Offset(0, 6),
-                      )
-                    ],
+          child: Column(
+            children: [
+              const SizedBox(height: 20),
+
+              // ================= الصورة + الاسم + الليفل =================
+              Stack(
+                children: [
+                  CircleAvatar(
+                    radius: 70,
+                    backgroundColor: Colors.grey.shade300,
+                    backgroundImage: _profileImage != null
+                        ? FileImage(_profileImage!)
+                        : null,
+                    child: _profileImage == null
+                        ? const Icon(Icons.person,
+                            size: 70, color: Colors.white)
+                        : null,
                   ),
-                  child: Row(
-                    children: [
-                      // Avatar
-                      CircleAvatar(
-                        radius: 30,
-                        backgroundColor: Colors.white,
-                        child: Icon(
-                          Icons.person,
-                          size: 32,
+
+                  Positioned(
+                    bottom: 6,
+                    right: 6,
+                    child: GestureDetector(
+                      onTap: _changeProfilePhoto,
+                      child: Container(
+                        padding: const EdgeInsets.all(6),
+                        decoration: BoxDecoration(
                           color: primary,
+                          shape: BoxShape.circle,
+                          border: Border.all(color: Colors.white, width: 2),
                         ),
-                      ),
-                      const SizedBox(width: 16),
-
-                      // Name + email + stats
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              widget.userName,
-                              style: const TextStyle(
-                                color: Colors.white,
-                                fontSize: 20,
-                                fontWeight: FontWeight.bold,
-                              ),
-                            ),
-                            const SizedBox(height: 4),
-                            Text(
-                              widget.email,
-                              style: const TextStyle(
-                                color: Colors.white70,
-                                fontSize: 13,
-                              ),
-                            ),
-                            const SizedBox(height: 10),
-                            Row(
-                              children: [
-                                _profileStatChip(
-                                  icon: Icons.local_fire_department_outlined,
-                                  label: "Streak",
-                                  value: "${widget.dailyStreak} days",
-                                ),
-                                const SizedBox(width: 8),
-                                _profileStatChip(
-                                  icon: Icons.star_border,
-                                  label: "Points",
-                                  value: widget.points.toString(),
-                                ),
-                              ],
-                            ),
-                          ],
+                        child: const Icon(
+                          Icons.edit,
+                          size: 18,
+                          color: Colors.white,
                         ),
-                      ),
-                    ],
-                  ),
-                ),
-
-                const SizedBox(height: 20),
-
-                // ----------- PERSONAL INFO CARD -----------
-                Container(
-                  width: double.infinity,
-                  padding: const EdgeInsets.all(16),
-                  decoration: BoxDecoration(
-                    color: Colors.white,
-                    borderRadius: BorderRadius.circular(18),
-                    boxShadow: [
-                      BoxShadow(
-                        blurRadius: 8,
-                        color: Colors.black.withOpacity(0.05),
-                        offset: const Offset(0, 4),
-                      ),
-                    ],
-                  ),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      // Title + Edit button
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                        children: [
-                          Text(
-                            "Personal info",
-                            style: theme.textTheme.titleMedium?.copyWith(
-                              fontWeight: FontWeight.bold,
-                            ),
-                          ),
-                          TextButton.icon(
-                            onPressed: _toggleEdit,
-                            icon: Icon(
-                              _isEditing ? Icons.check : Icons.edit_outlined,
-                              size: 18,
-                            ),
-                            label: Text(_isEditing ? "Save" : "Edit"),
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: 8),
-
-                      _buildTextField(
-                        label: "Full name",
-                        controller: _nameController,
-                        enabled: _isEditing,
-                      ),
-                      const SizedBox(height: 12),
-
-                      _buildTextField(
-                        label: "Username",
-                        controller: _usernameController,
-                        enabled: _isEditing,
-                      ),
-                      const SizedBox(height: 12),
-
-                      _buildTextField(
-                        label: "Email",
-                        controller: _emailController,
-                        enabled: _isEditing,
-                        keyboardType: TextInputType.emailAddress,
-                      ),
-                      const SizedBox(height: 12),
-
-                      _buildTextField(
-                        label: "Daily goal (minutes / day)",
-                        controller: _dailyGoalController,
-                        enabled: _isEditing,
-                        keyboardType: TextInputType.number,
-                      ),
-                      const SizedBox(height: 12),
-
-                      Text(
-                        "Current level",
-                        style: theme.textTheme.bodySmall?.copyWith(
-                          color: Colors.grey[700],
-                          fontWeight: FontWeight.w500,
-                        ),
-                      ),
-                      const SizedBox(height: 6),
-
-                      IgnorePointer(
-                        ignoring: !_isEditing,
-                        child: DropdownButtonFormField<String>(
-                          value: _selectedLevel,
-                          decoration: InputDecoration(
-                            filled: true,
-                            fillColor: _isEditing
-                                ? Colors.grey.shade100
-                                : Colors.grey.shade200,
-                            border: OutlineInputBorder(
-                              borderRadius: BorderRadius.circular(12),
-                              borderSide: BorderSide(
-                                color: Colors.grey.shade300,
-                              ),
-                            ),
-                            contentPadding: const EdgeInsets.symmetric(
-                              horizontal: 12,
-                              vertical: 10,
-                            ),
-                          ),
-                          items: const [
-                            DropdownMenuItem(
-                              value: "Beginner A1",
-                              child: Text("Beginner A1"),
-                            ),
-                            DropdownMenuItem(
-                              value: "Elementary A2",
-                              child: Text("Elementary A2"),
-                            ),
-                            DropdownMenuItem(
-                              value: "Intermediate B1",
-                              child: Text("Intermediate B1"),
-                            ),
-                          ],
-                          onChanged: (val) {
-                            if (val == null) return;
-                            setState(() {
-                              _selectedLevel = val;
-                            });
-                          },
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-
-                const SizedBox(height: 20),
-
-                // ----------- SETTINGS CARD -----------
-                Container(
-                  width: double.infinity,
-                  padding: const EdgeInsets.all(16),
-                  decoration: BoxDecoration(
-                    color: Colors.white,
-                    borderRadius: BorderRadius.circular(18),
-                    boxShadow: [
-                      BoxShadow(
-                        blurRadius: 8,
-                        color: Colors.black.withOpacity(0.05),
-                        offset: const Offset(0, 4),
-                      ),
-                    ],
-                  ),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        "App & learning settings",
-                        style: theme.textTheme.titleMedium?.copyWith(
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
-                      const SizedBox(height: 12),
-
-                      SwitchListTile(
-                        contentPadding: EdgeInsets.zero,
-                        title: const Text("Enable notifications"),
-                        subtitle: const Text("Remind me to practice daily"),
-                        value: _notificationsEnabled,
-                        onChanged: (val) {
-                          setState(() {
-                            _notificationsEnabled = val;
-                          });
-                        },
-                      ),
-
-                      SwitchListTile(
-                        contentPadding: EdgeInsets.zero,
-                        title: const Text("Enable sound"),
-                        subtitle:
-                            const Text("Play sounds for letters and feedback"),
-                        value: _soundEnabled,
-                        onChanged: (val) {
-                          setState(() {
-                            _soundEnabled = val;
-                          });
-                        },
-                      ),
-                    ],
-                  ),
-                ),
-
-                const SizedBox(height: 24),
-
-                // ----------- LOGOUT BUTTON -----------
-                SizedBox(
-                  width: double.infinity,
-                  child: ElevatedButton.icon(
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: Colors.redAccent,
-                      foregroundColor: Colors.white,
-                      padding: const EdgeInsets.symmetric(
-                        vertical: 14,
-                      ),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(12),
-                      ),
-                    ),
-                    onPressed: _logout,
-                    icon: const Icon(Icons.logout),
-                    label: const Text(
-                      "Log out",
-                      style: TextStyle(
-                        fontSize: 15,
-                        fontWeight: FontWeight.w600,
                       ),
                     ),
                   ),
+                ],
+              ),
+
+              const SizedBox(height: 14),
+
+              Text(
+                widget.name,
+                style: const TextStyle(
+                  fontSize: 22,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+
+              const SizedBox(height: 4),
+
+              Text(
+                widget.level,
+                style: TextStyle(
+                  fontSize: 14,
+                  color: Colors.grey.shade600,
+                ),
+              ),
+
+              const SizedBox(height: 30),
+
+              // ====================== المربع الأبيض ======================
+              Container(
+                margin: const EdgeInsets.symmetric(horizontal: 16),
+                padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 28),
+                width: double.infinity,
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(28),
+                  boxShadow: [
+                    BoxShadow(
+                      blurRadius: 18,
+                      offset: const Offset(0, 8),
+                      color: Colors.black.withOpacity(0.06),
+                    ),
+                  ],
+                ),
+                child: Column(
+                  children: [
+                    _ProfileOptionTile(
+                  icon: Icons.person_outline,
+                  label: "Edit Profile",
+                  color: primary,
+                  onTap: () {
+                    Navigator.pushNamed(
+                      context,
+                      '/edit_profile',
+                      arguments: {
+                        'name': widget.name,
+                        'email': widget.email,
+                        'level': widget.level,
+                      },
+                    );
+                  },
                 ),
 
-                const SizedBox(height: 10),
-              ],
-            ),
+                    const SizedBox(height: 14),
+
+                    _ProfileOptionTile(
+                      icon: Icons.notifications_outlined,
+                      label: "Notifications",
+                      color: primary,
+                      onTap: () {},
+                    ),
+                    const SizedBox(height: 14),
+
+                    _ProfileOptionTile(
+                      icon: Icons.lock_outline,
+                      label: "Change Password",
+                      color: primary,
+                      onTap: () {},
+                    ),
+
+                    const SizedBox(height: 30),
+
+                    SizedBox(
+                      width: double.infinity,
+                      child: OutlinedButton.icon(
+                        onPressed: () {},
+                        icon: const Icon(Icons.logout),
+                        label: const Text(
+                          "Sign Out",
+                          style: TextStyle(fontSize: 16),
+                        ),
+                        style: OutlinedButton.styleFrom(
+                          foregroundColor: primary,
+                          side: BorderSide(color: primary, width: 1.5),
+                          padding: const EdgeInsets.symmetric(
+                            vertical: 13,
+                          ),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(14),
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+
+              const SizedBox(height: 40),
+            ],
           ),
         ),
       ),
-    );
-  }
 
-  // --------- SMALL REUSABLE WIDGETS ---------
-
-  Widget _profileStatChip({
-    required IconData icon,
-    required String label,
-    required String value,
-  }) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-      decoration: BoxDecoration(
-        color: Colors.white.withOpacity(0.2),
-        borderRadius: BorderRadius.circular(30),
-      ),
-      child: Row(
-        children: [
-          Icon(icon, color: Colors.white, size: 16),
-          const SizedBox(width: 4),
-          Text(
-            "$label: ",
-            style: const TextStyle(color: Colors.white70, fontSize: 12),
-          ),
-          Text(
-            value,
-            style: const TextStyle(
-              color: Colors.white,
-              fontSize: 12,
-              fontWeight: FontWeight.bold,
-            ),
-          ),
+      bottomNavigationBar: BottomNavigationBar(
+        currentIndex: _index,
+        selectedItemColor: primary,
+        unselectedItemColor: Colors.grey,
+        type: BottomNavigationBarType.fixed,
+        onTap: (i) {
+          if (i == 0) Navigator.pop(context);
+          setState(() => _index = i);
+        },
+        items: const [
+          BottomNavigationBarItem(
+              icon: Icon(Icons.home_outlined), label: "Home"),
+          BottomNavigationBarItem(
+              icon: Icon(Icons.groups_outlined), label: "Community"),
+          BottomNavigationBarItem(
+              icon: Icon(Icons.smart_toy_outlined), label: "Chatbot"),
+          BottomNavigationBarItem(
+              icon: Icon(Icons.person), label: "Profile"),
         ],
       ),
     );
   }
+}
 
-  Widget _buildTextField({
-    required String label,
-    required TextEditingController controller,
-    bool enabled = false,
-    TextInputType? keyboardType,
-  }) {
-    return TextField(
-      controller: controller,
-      enabled: enabled,
-      keyboardType: keyboardType,
-      decoration: InputDecoration(
-        labelText: label,
-        filled: true,
-        fillColor: enabled ? Colors.grey.shade100 : Colors.grey.shade200,
-        border: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(12),
-        ),
-        enabledBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(12),
-          borderSide: BorderSide(color: Colors.grey.shade300),
-        ),
-        contentPadding: const EdgeInsets.symmetric(
-          horizontal: 12,
-          vertical: 10,
+// ================= TILE DESIGN =================
+class _ProfileOptionTile extends StatelessWidget {
+  final IconData icon;
+  final String label;
+  final Color color;
+  final VoidCallback onTap;
+
+  const _ProfileOptionTile({
+    required this.icon,
+    required this.label,
+    required this.color,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        borderRadius: BorderRadius.circular(16),
+        onTap: onTap,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(vertical: 10),
+          child: Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: color.withOpacity(0.12),
+                  shape: BoxShape.circle,
+                ),
+                child: Icon(
+                  icon,
+                  color: color,
+                  size: 22,
+                ),
+              ),
+              const SizedBox(width: 16),
+              Expanded(
+                child: Text(
+                  label,
+                  style: const TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
+              ),
+              const Icon(Icons.chevron_right, color: Colors.grey),
+            ],
+          ),
         ),
       ),
     );

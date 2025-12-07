@@ -9,6 +9,7 @@ import 'login/check_auth.dart';
 import 'login/reset_password_screen.dart'; 
 import 'Home_Screen/home_screen.dart';
 import 'profile/profile_main_screen.dart';
+import 'profile/edit_profile.dart';
 
 
 void main() {
@@ -43,12 +44,12 @@ class MyApp extends StatelessWidget {
               points: 1200,     // Replace with actual user data
             ),
          '/profile_main_screen': (_) => const ProfileScreen(
-  userName: 'Taleb',
-  email: 'taleb@example.com',
-  dailyStreak: 5,
-  points: 1200,
-  currentLevel: 'Beginner A1',
+ 
+              name: 'Taleb',
+              email: 'taleb@example.com',
+              level: 'Beginner A1',
 ),
+         '/edit_profile': (ctx) => const EditProfileScreen(),
 
          '/reset_password': (ctx) {
     final args = ModalRoute.of(ctx)!.settings.arguments as Map<String, dynamic>;
