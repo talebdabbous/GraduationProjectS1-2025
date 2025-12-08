@@ -5,6 +5,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
+
   @override
   State<LoginScreen> createState() => _LoginScreenState();
 }
@@ -31,28 +32,65 @@ class _LoginScreenState extends State<LoginScreen> {
     super.dispose();
   }
 
+  /// التعامل مع نجاح تسجيل الدخول أو تفعيل الإيميل
+  Future<void> _handleAuthSuccess(Map<String, dynamic> data) async {
+    final token = data['token'] as String;
+    final user  = data['user'] as Map<String, dynamic>? ?? {};
+
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString('token', token);
+
+    // حفظ بيانات المستخدم
+    await prefs.setString('user_name',  (user['name'] ?? '') as String);
+    await prefs.setString('user_email', (user['email'] ?? '') as String);
+    await prefs.setString('user_role',  (user['role'] ?? 'student') as String);
+    await prefs.setString('user_level', (user['level'] ?? 'Beginner A1') as String);
+
+    await prefs.setInt(
+      'user_dailyGoal',
+      (user['dailyGoal'] is int) ? user['dailyGoal'] as int : 15,
+    );
+
+    await prefs.setString('user_sex',  (user['sex'] ?? 'Male') as String);
+    await prefs.setString('user_dob',  (user['dateOfBirth'] ?? '') as String);
+    await prefs.setString(
+      'user_profilePicture',
+      (user['profilePicture'] ?? '') as String,
+    );
+
+    if (!mounted) return;
+
+    // الانتقال حسب حالة الامتحان المحلي
+    final completedExam = prefs.getBool('completed_level_exam') ?? false;
+    if (completedExam) {
+      Navigator.pushReplacementNamed(context, '/home_screen');
+    } else {
+      Navigator.pushReplacementNamed(context, '/ask_level');
+    }
+  }
+
   Future<void> _login() async {
-    // صفّر الأخطاء
     setState(() {
       emailError = null;
       passwordError = null;
     });
 
-    // تحقق بسيط قبل الطلب
     final e = email.text.trim();
     final p = password.text;
-
     bool valid = true;
+
     if (e.isEmpty || !e.contains('@')) {
       emailError = 'Please enter a valid email';
       emailFocus.requestFocus();
       valid = false;
     }
+
     if (p.isEmpty) {
       passwordError = 'Please enter your password';
       if (valid) passwordFocus.requestFocus();
       valid = false;
     }
+
     if (!valid) {
       setState(() {});
       return;
@@ -63,10 +101,7 @@ class _LoginScreenState extends State<LoginScreen> {
     setState(() => isLoading = false);
 
     if (result['success'] == true) {
-      // نجاح: خزّن التوكن وكمل
-      final token = result['data']['token'];
-      final prefs = await SharedPreferences.getInstance();
-      await prefs.setString('token', token);
+      final data = result['data'] as Map<String, dynamic>;
 
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
@@ -78,25 +113,25 @@ class _LoginScreenState extends State<LoginScreen> {
           backgroundColor: const Color(0xFF219EBC),
           behavior: SnackBarBehavior.floating,
           margin: const EdgeInsets.all(16),
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(14),
+          ),
           duration: const Duration(seconds: 2),
         ),
       );
-      Navigator.pushReplacementNamed(context, '/ask_level');
+
+      await _handleAuthSuccess(data);
       return;
     }
 
-    // فشل: إمّا بيانات غلط أو الحساب غير مفعّل
     final msg = (result['message'] ?? '').toString();
     final pending = result['pendingVerification'] == true;
 
     if (pending) {
-      // افتح Dialog للتحقق من الإيميل مباشرة
       await _showEmailVerifyDialog(e);
       return;
     }
 
-    // وزّع الرسالة على الحقول مثل الريجستر
     final low = msg.toLowerCase();
     setState(() {
       if (low.contains('password')) {
@@ -106,7 +141,6 @@ class _LoginScreenState extends State<LoginScreen> {
         emailError = msg;
         emailFocus.requestFocus();
       } else {
-        // لو رسالة عامة غير محددة، خليها تحت الإيميل
         emailError = msg.isNotEmpty ? msg : 'Login failed';
         emailFocus.requestFocus();
       }
@@ -135,25 +169,30 @@ class _LoginScreenState extends State<LoginScreen> {
               loading = true;
               codeError = null;
             });
-            final res = await AuthService.verifyEmail(email: emailVal, code: code);
+
+            final res =
+                await AuthService.verifyEmail(email: emailVal, code: code);
             setLocal(() => loading = false);
 
             if (res['success'] == true) {
-              // السيرفر برجع token + user (حسب كودك)
-              final data = res['data'];
-              final token = data['token'];
+              final data = res['data'] as Map<String, dynamic>;
+
               final prefs = await SharedPreferences.getInstance();
-              await prefs.setString('token', token);
+              await _handleAuthSuccess(data);
 
               timer?.cancel();
               if (Navigator.canPop(ctx)) Navigator.pop(ctx);
               if (!mounted) return;
+
               ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(content: Text('✅ Email verified. Logged in.')),
+                const SnackBar(
+                  content: Text('✅ Email verified. Logged in.'),
+                ),
               );
-              Navigator.pushReplacementNamed(context, '/ask_level');
             } else {
-              setLocal(() => codeError = res['message'] ?? 'Verification failed');
+              setLocal(
+                () => codeError = res['message'] ?? 'Verification failed',
+              );
             }
           }
 
@@ -182,17 +221,24 @@ class _LoginScreenState extends State<LoginScreen> {
                 });
               });
             } else {
-              setLocal(() => codeError = r['message'] ?? 'Could not resend code');
+              setLocal(
+                () => codeError = r['message'] ?? 'Could not resend code',
+              );
             }
           }
 
           return AlertDialog(
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(16),
+            ),
             title: const Text('Verify your email'),
             content: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
-                Text('We sent a 6-digit code to\n$emailVal', textAlign: TextAlign.center),
+                Text(
+                  'We sent a 6-digit code to\n$emailVal',
+                  textAlign: TextAlign.center,
+                ),
                 const SizedBox(height: 12),
                 TextField(
                   controller: codeCtrl,
@@ -202,7 +248,9 @@ class _LoginScreenState extends State<LoginScreen> {
                     labelText: 'Verification code',
                     counterText: '',
                     errorText: codeError,
-                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(12),
+                    ),
                   ),
                   onChanged: (_) => setLocal(() => codeError = null),
                 ),
@@ -210,20 +258,31 @@ class _LoginScreenState extends State<LoginScreen> {
             ),
             actions: [
               TextButton(
-                onPressed: loading ? null : () {
-                  timer?.cancel();
-                  Navigator.pop(ctx);
-                },
+                onPressed: loading
+                    ? null
+                    : () {
+                        timer?.cancel();
+                        Navigator.pop(ctx);
+                      },
                 child: const Text('Cancel'),
               ),
               TextButton(
                 onPressed: loading || remaining > 0 ? null : resend,
-                child: Text(remaining > 0 ? 'Resend (${remaining}s)' : 'Resend'),
+                child: Text(
+                  remaining > 0 ? 'Resend (${remaining}s)' : 'Resend',
+                ),
               ),
               ElevatedButton(
                 onPressed: loading ? null : verify,
                 child: loading
-                    ? const SizedBox(height: 20, width: 20, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
+                    ? const SizedBox(
+                        height: 20,
+                        width: 20,
+                        child: CircularProgressIndicator(
+                          strokeWidth: 2,
+                          color: Colors.white,
+                        ),
+                      )
                     : const Text('Verify'),
               ),
             ],
@@ -282,7 +341,8 @@ class _LoginScreenState extends State<LoginScreen> {
                                 borderRadius: BorderRadius.circular(12),
                               ),
                             ),
-                            onChanged: (_) => setState(() => emailError = null),
+                            onChanged: (_) =>
+                                setState(() => emailError = null),
                             textInputAction: TextInputAction.next,
                           ),
                           const SizedBox(height: 14),
@@ -295,22 +355,29 @@ class _LoginScreenState extends State<LoginScreen> {
                               labelText: "Password",
                               prefixIcon: const Icon(Icons.lock),
                               suffixIcon: IconButton(
-                                onPressed: () => setState(() => obscure = !obscure),
-                                icon: Icon(obscure ? Icons.visibility : Icons.visibility_off),
+                                onPressed: () =>
+                                    setState(() => obscure = !obscure),
+                                icon: Icon(
+                                  obscure
+                                      ? Icons.visibility
+                                      : Icons.visibility_off,
+                                ),
                               ),
                               errorText: passwordError,
                               border: OutlineInputBorder(
                                 borderRadius: BorderRadius.circular(12),
                               ),
                             ),
-                            onChanged: (_) => setState(() => passwordError = null),
+                            onChanged: (_) =>
+                                setState(() => passwordError = null),
                             textInputAction: TextInputAction.done,
                           ),
 
                           Align(
                             alignment: Alignment.centerRight,
                             child: TextButton(
-                              onPressed: () => Navigator.pushNamed(context, '/forgot'),
+                              onPressed: () =>
+                                  Navigator.pushNamed(context, '/forgot'),
                               child: const Text("Forgot password?"),
                             ),
                           ),
@@ -334,23 +401,51 @@ class _LoginScreenState extends State<LoginScreen> {
                                       color: Colors.white,
                                     ),
                                   )
-                                : const Text("Sign in", style: TextStyle(fontSize: 18)),
+                                : const Text(
+                                    "Sign in",
+                                    style: TextStyle(fontSize: 18),
+                                  ),
                           ),
 
                           const SizedBox(height: 12),
+
                           Row(
                             mainAxisAlignment: MainAxisAlignment.center,
                             children: [
                               const Text("Don’t have an account? "),
                               TextButton(
-                                onPressed: () => Navigator.pushNamed(context, '/register'),
+                                onPressed: () =>
+                                    Navigator.pushNamed(context, '/register'),
                                 child: const Text("Register"),
                               ),
                             ],
                           ),
-                          TextButton(
-                            onPressed: () => Navigator.pushReplacementNamed(context, '/home_screen'),
-                            child: const Text("Back"),
+
+                          const SizedBox(height: 8),
+
+                          /// 🔵 زر Back داخل الكارد
+                          TextButton.icon(
+                            onPressed: () {
+                              Navigator.pushReplacementNamed(
+                                  context, '/home_screen');
+                            },
+                            // icon: const Icon(
+                            //   Icons.arrow_back_ios_new,
+                            //   size: 18,
+                            //   color: Color(0xFF0EA5E9),
+                            // ),
+                            label: const Text(
+                              "Back ",
+                              style: TextStyle(
+                                color: Color(0xFF0EA5E9),
+                                fontSize: 16,
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                            style: TextButton.styleFrom(
+                              padding: const EdgeInsets.symmetric(
+                                  vertical: 10),
+                            ),
                           ),
                         ],
                       ),

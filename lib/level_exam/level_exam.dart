@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+import '../services/auth_service.dart';
 
 class LevelExamPage extends StatefulWidget {
   const LevelExamPage({super.key});
@@ -52,7 +54,7 @@ class _LevelExamPageState extends State<LevelExamPage> {
     if (_index > 0) setState(() => _index--);
   }
 
-  void _finish() {
+    Future<void> _finish() async {
     int score = 0;
     for (var i = 0; i < _questions.length; i++) {
       final sel = _answers[i];
@@ -71,6 +73,26 @@ class _LevelExamPageState extends State<LevelExamPage> {
       level = "مبتدئ جدًا";
     }
 
+    // ✅ نخزن محليًا + نحدّث الباك
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool('completed_level_exam', true);
+    await prefs.setString('user_level', level);
+
+    final token = prefs.getString('token');
+    if (token != null && token.isNotEmpty) {
+      try {
+        await AuthService.updateMe(
+          token: token,
+          level: level,
+          completedLevelExam: true, // 👈 هاي أهم سطر بالنسبة لسؤالك
+        );
+      } catch (_) {
+        // لو صار خطأ من تجاهل
+      }
+    }
+
+    if (!mounted) return;
+
     showDialog(
       context: context,
       barrierDismissible: false,
@@ -84,8 +106,8 @@ class _LevelExamPageState extends State<LevelExamPage> {
         actions: [
           TextButton(
             onPressed: () {
-              Navigator.pop(context);
-              Navigator.pop(context);
+              Navigator.pop(context); // سكّر الديالوج
+              Navigator.pushReplacementNamed(context, '/home_screen');
             },
             child: const Text("إنهاء"),
           ),
@@ -103,6 +125,7 @@ class _LevelExamPageState extends State<LevelExamPage> {
       ),
     );
   }
+
 
   @override
   Widget build(BuildContext context) {
@@ -235,7 +258,10 @@ class _LevelExamPageState extends State<LevelExamPage> {
                             onPressed: _index == 0 ? null : _prev,
                             child: const Text(
                               "السابق",
-                              style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+                              style: TextStyle(
+                                fontWeight: FontWeight.bold,
+                                fontSize: 16,
+                              ),
                             ),
                           ),
                         ),
@@ -254,7 +280,10 @@ class _LevelExamPageState extends State<LevelExamPage> {
                             onPressed: (_answers[_index] == null) ? null : _next,
                             child: Text(
                               _index == _questions.length - 1 ? "إنهاء" : "التالي",
-                              style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+                              style: const TextStyle(
+                                fontWeight: FontWeight.bold,
+                                fontSize: 16,
+                              ),
                             ),
                           ),
                         ),

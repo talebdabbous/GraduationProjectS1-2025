@@ -1,6 +1,6 @@
-import 'dart:convert';
 import 'package:flutter/material.dart';
-import 'package:http/http.dart' as http;
+import 'package:shared_preferences/shared_preferences.dart';
+import '../services/auth_service.dart';
 
 class EditProfileScreen extends StatefulWidget {
   const EditProfileScreen({super.key});
@@ -50,7 +50,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
       }
 
       final dobRaw = routeArgs['dob'];
-      if (dobRaw is String) dob = DateTime.tryParse(dobRaw);
+      if (dobRaw is String) dob = DateTime.tryParse(dobRaw); // "YYYY-MM-DD"
       if (dobRaw is DateTime) dob = dobRaw;
     }
 
@@ -103,41 +103,62 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
     setState(() => _isSaving = true);
 
     try {
-      // TODO: عدّل الـ baseUrl حسب السيرفر تبعك
-      const baseUrl = "https://your-backend-domain.com";
-      final url = Uri.parse("$baseUrl/api/users/me");
+      // 🔹 نجيب التوكن من SharedPreferences
+      final prefs = await SharedPreferences.getInstance();
+      final token = prefs.getString('token');
 
-      // TODO: استبدل هذا بالتوكن الحقيقي من التخزين
-      const token = "YOUR_JWT_TOKEN_HERE";
+      if (token == null || token.isEmpty) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text("You are not logged in.")),
+        );
+        setState(() => _isSaving = false);
+        return;
+      }
 
-      final body = jsonEncode({
-        "name": _nameController.text.trim(),
-        "email": _emailController.text.trim(),
-        "dob": _dateOfBirth!.toIso8601String(),
-        "sex": _sex,
-        "dailyGoal":
-            int.tryParse(_dailyGoalController.text.trim()) ?? 15,
-      });
+      // نحاول نحول dailyGoal ل int، ولو فاضي منبعت null
+      final dailyGoalText = _dailyGoalController.text.trim();
+      final dailyGoal = dailyGoalText.isEmpty
+          ? null
+          : int.tryParse(dailyGoalText);
 
-      final res = await http.put(
-        url,
-        headers: {
-          "Content-Type": "application/json",
-          "Authorization": "Bearer $token",
-        },
-        body: body,
+      // 🔹 نحدّث البروفايل عن طريق الباك
+      final res = await AuthService.updateMe(
+        token: token,
+        name: _nameController.text.trim(),
+        email: _emailController.text.trim(),
+        dateOfBirth: _dateOfBirth!
+            .toIso8601String()
+            .substring(0, 10), // "YYYY-MM-DD"
+        sex: _sex,
+        dailyGoal: dailyGoal,
       );
 
       if (!mounted) return;
 
-      if (res.statusCode == 200) {
+      if (res['success'] == true) {
+        // نحدّث الداتا في SharedPreferences كمان
+        final data = res['data'] as Map<String, dynamic>? ?? {};
+        final user = data['user'] as Map<String, dynamic>? ?? {};
+
+        await prefs.setString('user_name', (user['name'] ?? '') as String);
+        await prefs.setString('user_email', (user['email'] ?? '') as String);
+        await prefs.setString(
+            'user_dob', (user['dateOfBirth'] ?? '') as String);
+        await prefs.setString('user_sex', (user['sex'] ?? 'Male') as String);
+        await prefs.setInt(
+          'user_dailyGoal',
+          (user['dailyGoal'] is int) ? user['dailyGoal'] as int : 15,
+        );
+
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(content: Text("Profile updated successfully")),
         );
+        // نرجع true عشان شاشة البروفايل لو حابة تعمل refresh
         Navigator.pop(context, true);
       } else {
+        final msg = res['message']?.toString() ?? 'Update failed';
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text("Error ${res.statusCode}: ${res.body}")),
+          SnackBar(content: Text(msg)),
         );
       }
     } catch (e) {
