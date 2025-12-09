@@ -2,6 +2,8 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 
+
+
 class ProfileScreen extends StatefulWidget {
   final String name;
   final String email;
@@ -216,29 +218,36 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 child: Column(
                   children: [
                     _ProfileOptionTile(
-                      icon: Icons.person_outline,
-                      label: "Edit Profile",
-                      color: primary,
-                      onTap: () async {
-                        final result = await Navigator.pushNamed(
-                          context,
-                          '/edit_profile',
-                          arguments: {
-                            'name': _name,
-                            'email': _email,
-                            'dob': _dateOfBirth,     // من الباك
-                            'sex': _sex,             // من الباك
-                            'dailyGoal': _dailyGoal, // من الباك
-                          },
-                        );
+                        icon: Icons.person_outline,
+                        label: "Edit Profile",
+                        color: primary,
+                        onTap: () async {
+                          final result = await Navigator.pushNamed(
+                            context,
+                            '/edit_profile',
+                            arguments: {
+                              'name': _name,
+                              'email': _email,
+                              'dob': _dateOfBirth,
+                              'sex': _sex,
+                              'dailyGoal': _dailyGoal,
+                              'level': _level, // لو بتعدل الليفل كمان
+                            },
+                          );
 
-                        // لو رجعنا true من شاشة الإيديت، لاحقاً بنقدر نعمل refresh من الباك
-                        if (result == true) {
-                          // TODO: استدعِ /auth/me وحدّث _name / _level / ... لو حاب
-                          setState(() {});
-                        }
-                      },
-                    ),
+                          // نتوقع من صفحة الإيديت ترجع Map فيها القيم المحدثة
+                          if (result is Map) {
+                            setState(() {
+                              _name        = (result['name']  ?? _name) as String;
+                              _email       = (result['email'] ?? _email) as String;
+                              _level       = (result['level'] ?? _level) as String;
+                              _dateOfBirth = result['dob']     as String? ?? _dateOfBirth;
+                              _sex         = result['sex']     as String? ?? _sex;
+                              _dailyGoal   = result['dailyGoal'] as int? ?? _dailyGoal;
+                            });
+                          }
+                        },
+                      ),
 
                     const SizedBox(height: 14),
 

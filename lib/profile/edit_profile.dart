@@ -115,20 +115,18 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
         return;
       }
 
-      // نحاول نحول dailyGoal ل int، ولو فاضي منبعت null
+      // dailyGoal → int? (ممكن تكون null)
       final dailyGoalText = _dailyGoalController.text.trim();
-      final dailyGoal = dailyGoalText.isEmpty
-          ? null
-          : int.tryParse(dailyGoalText);
+      final dailyGoal =
+          dailyGoalText.isEmpty ? null : int.tryParse(dailyGoalText);
 
       // 🔹 نحدّث البروفايل عن طريق الباك
       final res = await AuthService.updateMe(
         token: token,
         name: _nameController.text.trim(),
         email: _emailController.text.trim(),
-        dateOfBirth: _dateOfBirth!
-            .toIso8601String()
-            .substring(0, 10), // "YYYY-MM-DD"
+        dateOfBirth:
+            _dateOfBirth!.toIso8601String().substring(0, 10), // "YYYY-MM-DD"
         sex: _sex,
         dailyGoal: dailyGoal,
       );
@@ -153,8 +151,15 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(content: Text("Profile updated successfully")),
         );
-        // نرجع true عشان شاشة البروفايل لو حابة تعمل refresh
-        Navigator.pop(context, true);
+
+        // ✅ نرجّع القيم الجديدة للشاشة السابقة عشان تتحدث فورًا
+        Navigator.pop(context, {
+          'name': _nameController.text.trim(),
+          'email': _emailController.text.trim(),
+          'dob': _dateOfBirth!.toIso8601String().substring(0, 10),
+          'sex': _sex,
+          'dailyGoal': dailyGoal ?? user['dailyGoal'],
+        });
       } else {
         final msg = res['message']?.toString() ?? 'Update failed';
         ScaffoldMessenger.of(context).showSnackBar(

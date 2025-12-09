@@ -45,6 +45,46 @@ class _RegisterScreenState extends State<RegisterScreen> {
     super.dispose();
   }
 
+  /// ✅ نفس فكرة _handleAuthSuccess في LoginScreen
+  /// نخزن التوكن + بيانات المستخدم في SharedPreferences
+  /// وبعدين نقرر نروح على home أو ask_level حسب completed_level_exam (local)
+  Future<void> _handleAuthSuccess(Map<String, dynamic> data) async {
+    final token = data['token'] as String;
+    final user = data['user'] as Map<String, dynamic>? ?? {};
+
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString('token', token);
+
+    await prefs.setString('user_name', (user['name'] ?? '') as String);
+    await prefs.setString('user_email', (user['email'] ?? '') as String);
+    await prefs.setString('user_role', (user['role'] ?? 'student') as String);
+    await prefs.setString('user_level', (user['level'] ?? 'Beginner A1') as String);
+
+    await prefs.setInt(
+      'user_dailyGoal',
+      (user['dailyGoal'] is int) ? user['dailyGoal'] as int : 15,
+    );
+
+    await prefs.setString('user_sex', (user['sex'] ?? 'Male') as String);
+    await prefs.setString(
+      'user_dob',
+      (user['dateOfBirth'] ?? '') as String,
+    );
+    await prefs.setString(
+      'user_profilePicture',
+      (user['profilePicture'] ?? '') as String,
+    );
+
+    if (!mounted) return;
+
+    final completedExam = prefs.getBool('completed_level_exam') ?? false;
+    if (completedExam) {
+      Navigator.pushReplacementNamed(context, '/home_screen');
+    } else {
+      Navigator.pushReplacementNamed(context, '/ask_level');
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -236,18 +276,19 @@ class _RegisterScreenState extends State<RegisterScreen> {
                 loading = true;
                 codeError = null;
               });
-              final res = await AuthService.verifyEmail(email: emailVal, code: c);
+              final res =
+                  await AuthService.verifyEmail(email: emailVal, code: c);
               setLocal(() => loading = false);
               if (res['success'] == true) {
-                final token = res['data']['token'];
-                final sp = await SharedPreferences.getInstance();
-                await sp.setString('token', token);
+                final data = res['data'] as Map<String, dynamic>;
                 t?.cancel();
                 if (Navigator.canPop(ctx)) Navigator.pop(ctx);
                 if (!mounted) return;
-                Navigator.pushReplacementNamed(context, '/ask_level');
+                // ✅ بعد التحقق الناجح: خزن التوكن + بيانات المستخدم وكمّل نفس مسار اللوجين
+                await _handleAuthSuccess(data);
               } else {
-                setLocal(() => codeError = res['message'] ?? 'Verification failed');
+                setLocal(
+                    () => codeError = res['message'] ?? 'Verification failed');
               }
             }
 
@@ -257,7 +298,8 @@ class _RegisterScreenState extends State<RegisterScreen> {
                 loading = true;
                 codeError = null;
               });
-              final res = await AuthService.resendVerification(email: emailVal);
+              final res =
+                  await AuthService.resendVerification(email: emailVal);
               setLocal(() => loading = false);
               if (res['success'] == true) {
                 setLocal(() {
@@ -276,17 +318,20 @@ class _RegisterScreenState extends State<RegisterScreen> {
                   });
                 });
               } else {
-                setLocal(() => codeError = res['message'] ?? 'Could not resend code');
+                setLocal(() =>
+                    codeError = res['message'] ?? 'Could not resend code');
               }
             }
 
             return AlertDialog(
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+              shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(16)),
               title: const Text('Verify your email'),
               content: Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  Text('We sent a 6-digit code to\n$emailVal', textAlign: TextAlign.center),
+                  Text('We sent a 6-digit code to\n$emailVal',
+                      textAlign: TextAlign.center),
                   const SizedBox(height: 12),
                   TextField(
                     controller: codeCtrl,
@@ -296,7 +341,8 @@ class _RegisterScreenState extends State<RegisterScreen> {
                       labelText: 'Verification code',
                       counterText: '',
                       errorText: codeError,
-                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                      border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(12)),
                     ),
                     onChanged: (_) => setLocal(() => codeError = null),
                   ),
@@ -314,7 +360,8 @@ class _RegisterScreenState extends State<RegisterScreen> {
                 ),
                 TextButton(
                   onPressed: loading || remaining > 0 ? null : doResend,
-                  child: Text(remaining > 0 ? 'Resend (${remaining}s)' : 'Resend'),
+                  child: Text(
+                      remaining > 0 ? 'Resend (${remaining}s)' : 'Resend'),
                 ),
                 ElevatedButton(
                   onPressed: loading ? null : doVerify,
@@ -322,7 +369,8 @@ class _RegisterScreenState extends State<RegisterScreen> {
                       ? const SizedBox(
                           height: 20,
                           width: 20,
-                          child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                          child: CircularProgressIndicator(
+                              strokeWidth: 2, color: Colors.white),
                         )
                       : const Text('Verify'),
                 ),
@@ -395,7 +443,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
     }
 
     final pwd = password.text;
-    // لازم يكون أطول من 8 → إذا <= 8 خطأ
+    // لازم يكون أطول من 8 → إذا < 8 خطأ
     if (pwd.length < 8) {
       passwordError = 'Password must be longer than 8 characters';
       if (valid) passwordFocus.requestFocus();
@@ -436,9 +484,18 @@ class _RegisterScreenState extends State<RegisterScreen> {
     setState(() => isLoading = false);
 
     if (result['success'] == true) {
-      // ✅ ما في Token من /register. نعرض نافذة OTP مباشرة.
+      final data = result['data'] as Map<String, dynamic>;
+      final pending = result['pendingVerification'] == true;
+
       if (!mounted) return;
-      await _showOtpDialog(emailVal);
+
+      if (pending) {
+        // ✅ مود OTP شغّال → افتح Dialog الكود
+        await _showOtpDialog(emailVal);
+      } else {
+        // ✅ التحقق مطفي → رجع token + user → كمّل مسار اللوجين
+        await _handleAuthSuccess(data);
+      }
       return;
     } else {
       // بدل ما نعمل Dialog، منمسك حالة "الإيميل مستخدم" ونظهرها تحت الحقل

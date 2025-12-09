@@ -17,7 +17,11 @@ class AuthService {
     }
   }
 
-  // ===== Register (يرسل OTP تفعيل الإيميل) =====
+  // ===== Register =====
+  // في حال التحقق مُفعّل:
+  //   backend: { message, pendingVerification: true, user: { id, email } }
+  // في حال التحقق مُعطّل:
+  //  backend: { message, token, user: {...} }
   static Future<Map<String, dynamic>> registerUser({
     required String name,
     required String email,
@@ -48,14 +52,23 @@ class AuthService {
       headers: {'Content-Type': 'application/json'},
       body: jsonEncode(body),
     );
+
     final data = _json(res.body);
     final ok = res.statusCode == 200 || res.statusCode == 201;
-    return ok
-        ? {'success': true, 'data': data}
-        : {
-            'success': false,
-            'message': data['message'] ?? 'Registration failed',
-          };
+
+    if (ok) {
+      // نرجّع data كما هي + فلاغ pendingVerification لو موجود
+      return {
+        'success': true,
+        'data': data,
+        'pendingVerification': data['pendingVerification'] == true,
+      };
+    } else {
+      return {
+        'success': false,
+        'message': data['message'] ?? 'Registration failed',
+      };
+    }
   }
 
   // ===== Verify Email (OTP) =====
