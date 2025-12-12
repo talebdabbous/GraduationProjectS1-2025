@@ -20,7 +20,7 @@ class _CheckAuthState extends State<CheckAuth> {
     final token = prefs.getString('token');
 
     if (token != null && token.isNotEmpty) {
-      Navigator.pushReplacementNamed(context, '/ask_level');
+      Navigator.pushReplacementNamed(context, '/home_screen');
     } else {
       Navigator.pushReplacementNamed(context, '/welcome');
     }

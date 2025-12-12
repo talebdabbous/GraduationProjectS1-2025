@@ -1,8 +1,7 @@
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
-
-
+import 'package:shared_preferences/shared_preferences.dart';
 
 class ProfileScreen extends StatefulWidget {
   final String name;
@@ -32,7 +31,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
   int _index = 3;
   File? _profileImage;
 
-  // بننسخ قيم الويجت ل متغيرات قابلة للتعديل داخل الstate
   late String _name;
   late String _email;
   late String _level;
@@ -108,6 +106,29 @@ class _ProfileScreenState extends State<ProfileScreen> {
     );
   }
 
+  // ========================= Logout =========================
+  Future<void> _logout() async {
+    final prefs = await SharedPreferences.getInstance();
+
+    await prefs.remove('token');
+    await prefs.remove('user_name');
+    await prefs.remove('user_email');
+    await prefs.remove('user_role');
+    await prefs.remove('user_level');
+    await prefs.remove('user_dailyGoal');
+    await prefs.remove('user_sex');
+    await prefs.remove('user_dob');
+    await prefs.remove('user_profilePicture');
+
+    if (!mounted) return;
+
+    Navigator.pushNamedAndRemoveUntil(
+      context,
+      '/welcome',
+      (route) => false,
+    );
+  }
+
   // =================================================================
 
   @override
@@ -125,9 +146,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
         backgroundColor: const Color(0xFFF3F5F7),
         title: const Text(
           "Profile",
-          style: TextStyle(
-            fontWeight: FontWeight.w600,
-          ),
+          style: TextStyle(fontWeight: FontWeight.w600),
         ),
       ),
 
@@ -144,15 +163,13 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   CircleAvatar(
                     radius: 70,
                     backgroundColor: Colors.grey.shade300,
-                    backgroundImage: _profileImage != null
-                        ? FileImage(_profileImage!)
-                        : null,
+                    backgroundImage:
+                        _profileImage != null ? FileImage(_profileImage!) : null,
                     child: _profileImage == null
                         ? const Icon(Icons.person,
                             size: 70, color: Colors.white)
                         : null,
                   ),
-
                   Positioned(
                     bottom: 6,
                     right: 6,
@@ -165,11 +182,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
                           shape: BoxShape.circle,
                           border: Border.all(color: Colors.white, width: 2),
                         ),
-                        child: const Icon(
-                          Icons.edit,
-                          size: 18,
-                          color: Colors.white,
-                        ),
+                        child: const Icon(Icons.edit,
+                            size: 18, color: Colors.white),
                       ),
                     ),
                   ),
@@ -180,20 +194,16 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
               Text(
                 _name,
-                style: const TextStyle(
-                  fontSize: 22,
-                  fontWeight: FontWeight.w700,
-                ),
+                style:
+                    const TextStyle(fontSize: 22, fontWeight: FontWeight.w700),
               ),
 
               const SizedBox(height: 4),
 
               Text(
                 _level,
-                style: TextStyle(
-                  fontSize: 14,
-                  color: Colors.grey.shade600,
-                ),
+                style:
+                    TextStyle(fontSize: 14, color: Colors.grey.shade600),
               ),
 
               const SizedBox(height: 30),
@@ -218,36 +228,36 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 child: Column(
                   children: [
                     _ProfileOptionTile(
-                        icon: Icons.person_outline,
-                        label: "Edit Profile",
-                        color: primary,
-                        onTap: () async {
-                          final result = await Navigator.pushNamed(
-                            context,
-                            '/edit_profile',
-                            arguments: {
-                              'name': _name,
-                              'email': _email,
-                              'dob': _dateOfBirth,
-                              'sex': _sex,
-                              'dailyGoal': _dailyGoal,
-                              'level': _level, // لو بتعدل الليفل كمان
-                            },
-                          );
+                      icon: Icons.person_outline,
+                      label: "Edit Profile",
+                      color: primary,
+                      onTap: () async {
+                        final result = await Navigator.pushNamed(
+                          context,
+                          '/edit_profile',
+                          arguments: {
+                            'name': _name,
+                            'email': _email,
+                            'dob': _dateOfBirth,
+                            'sex': _sex,
+                            'dailyGoal': _dailyGoal,
+                            'level': _level,
+                          },
+                        );
 
-                          // نتوقع من صفحة الإيديت ترجع Map فيها القيم المحدثة
-                          if (result is Map) {
-                            setState(() {
-                              _name        = (result['name']  ?? _name) as String;
-                              _email       = (result['email'] ?? _email) as String;
-                              _level       = (result['level'] ?? _level) as String;
-                              _dateOfBirth = result['dob']     as String? ?? _dateOfBirth;
-                              _sex         = result['sex']     as String? ?? _sex;
-                              _dailyGoal   = result['dailyGoal'] as int? ?? _dailyGoal;
-                            });
-                          }
-                        },
-                      ),
+                        if (result is Map) {
+                          setState(() {
+                            _name  = (result['name'] ?? _name) as String;
+                            _email = (result['email'] ?? _email) as String;
+                            _dateOfBirth =
+                                result['dob'] as String? ?? _dateOfBirth;
+                            _sex = result['sex'] as String? ?? _sex;
+                            _dailyGoal =
+                                result['dailyGoal'] as int? ?? _dailyGoal;
+                          });
+                        }
+                      },
+                    ),
 
                     const SizedBox(height: 14),
 
@@ -257,6 +267,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                       color: primary,
                       onTap: () {},
                     ),
+
                     const SizedBox(height: 14),
 
                     _ProfileOptionTile(
@@ -271,12 +282,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                     SizedBox(
                       width: double.infinity,
                       child: OutlinedButton.icon(
-                        onPressed: () {
-                          // TODO:
-                          // 1) امسح التوكن من SharedPreferences
-                          // 2) امسح بيانات المستخدم
-                          // 3) Navigator.pushNamedAndRemoveUntil(context, '/login', (_) => false);
-                        },
+                        onPressed: _logout,
                         icon: const Icon(Icons.logout),
                         label: const Text(
                           "Sign Out",
@@ -285,9 +291,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
                         style: OutlinedButton.styleFrom(
                           foregroundColor: primary,
                           side: BorderSide(color: primary, width: 1.5),
-                          padding: const EdgeInsets.symmetric(
-                            vertical: 13,
-                          ),
+                          padding:
+                              const EdgeInsets.symmetric(vertical: 13),
                           shape: RoundedRectangleBorder(
                             borderRadius: BorderRadius.circular(14),
                           ),
@@ -310,10 +315,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
         unselectedItemColor: Colors.grey,
         type: BottomNavigationBarType.fixed,
         onTap: (i) {
-          if (i == 0) {
-            // رجوع للهوم
-            Navigator.pop(context);
-          }
+          if (i == 0) Navigator.pop(context);
           setState(() => _index = i);
         },
         items: const [
@@ -362,11 +364,7 @@ class _ProfileOptionTile extends StatelessWidget {
                   color: color.withOpacity(0.12),
                   shape: BoxShape.circle,
                 ),
-                child: Icon(
-                  icon,
-                  color: color,
-                  size: 22,
-                ),
+                child: Icon(icon, color: color, size: 22),
               ),
               const SizedBox(width: 16),
               Expanded(
