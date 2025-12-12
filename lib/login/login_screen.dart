@@ -427,7 +427,7 @@ class _LoginScreenState extends State<LoginScreen> {
                           TextButton.icon(
                             onPressed: () {
                               Navigator.pushReplacementNamed(
-                                  context, '/home_screen');
+                                  context, '/welcome');
                             },
                             // icon: const Icon(
                             //   Icons.arrow_back_ios_new,

@@ -10,7 +10,7 @@ class ProfileScreen extends StatefulWidget {
 
   // جايين من الباك
   final String? dateOfBirth; // "YYYY-MM-DD"
-  final String? sex;         // "Male" / "Female"
+  final String? sex; // "Male" / "Female"
   final int? dailyGoal;
 
   const ProfileScreen({
@@ -41,12 +41,12 @@ class _ProfileScreenState extends State<ProfileScreen> {
   @override
   void initState() {
     super.initState();
-    _name        = widget.name;
-    _email       = widget.email;
-    _level       = widget.level;
+    _name = widget.name;
+    _email = widget.email;
+    _level = widget.level;
     _dateOfBirth = widget.dateOfBirth;
-    _sex         = widget.sex;
-    _dailyGoal   = widget.dailyGoal;
+    _sex = widget.sex;
+    _dailyGoal = widget.dailyGoal;
   }
 
   // ========================= تغيير الصورة =========================
@@ -120,6 +120,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
     await prefs.remove('user_dob');
     await prefs.remove('user_profilePicture');
 
+    // ✅ مهم عشان ما يضل الكاش يوديك عالهوم
+    await prefs.remove('completed_level_exam');
+
     if (!mounted) return;
 
     Navigator.pushNamedAndRemoveUntil(
@@ -138,7 +141,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
     return Scaffold(
       backgroundColor: const Color(0xFFF3F5F7),
-
       appBar: AppBar(
         automaticallyImplyLeading: false,
         centerTitle: true,
@@ -149,7 +151,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
           style: TextStyle(fontWeight: FontWeight.w600),
         ),
       ),
-
       body: SafeArea(
         child: SingleChildScrollView(
           physics: const BouncingScrollPhysics(),
@@ -157,7 +158,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
             children: [
               const SizedBox(height: 20),
 
-              // ================= الصورة + الاسم + الليفل =================
               Stack(
                 children: [
                   CircleAvatar(
@@ -194,25 +194,23 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
               Text(
                 _name,
-                style:
-                    const TextStyle(fontSize: 22, fontWeight: FontWeight.w700),
+                style: const TextStyle(
+                  fontSize: 22,
+                  fontWeight: FontWeight.w700,
+                ),
               ),
-
               const SizedBox(height: 4),
 
               Text(
                 _level,
-                style:
-                    TextStyle(fontSize: 14, color: Colors.grey.shade600),
+                style: TextStyle(fontSize: 14, color: Colors.grey.shade600),
               ),
 
               const SizedBox(height: 30),
 
-              // ====================== المربع الأبيض ======================
               Container(
                 margin: const EdgeInsets.symmetric(horizontal: 16),
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 20, vertical: 28),
+                padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 28),
                 width: double.infinity,
                 decoration: BoxDecoration(
                   color: Colors.white,
@@ -247,13 +245,14 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
                         if (result is Map) {
                           setState(() {
-                            _name  = (result['name'] ?? _name) as String;
+                            _name = (result['name'] ?? _name) as String;
                             _email = (result['email'] ?? _email) as String;
                             _dateOfBirth =
                                 result['dob'] as String? ?? _dateOfBirth;
                             _sex = result['sex'] as String? ?? _sex;
                             _dailyGoal =
                                 result['dailyGoal'] as int? ?? _dailyGoal;
+                            _level = (result['level'] ?? _level) as String;
                           });
                         }
                       },
@@ -291,8 +290,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                         style: OutlinedButton.styleFrom(
                           foregroundColor: primary,
                           side: BorderSide(color: primary, width: 1.5),
-                          padding:
-                              const EdgeInsets.symmetric(vertical: 13),
+                          padding: const EdgeInsets.symmetric(vertical: 13),
                           shape: RoundedRectangleBorder(
                             borderRadius: BorderRadius.circular(14),
                           ),
@@ -308,7 +306,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
           ),
         ),
       ),
-
       bottomNavigationBar: BottomNavigationBar(
         currentIndex: _index,
         selectedItemColor: primary,
@@ -325,15 +322,13 @@ class _ProfileScreenState extends State<ProfileScreen> {
               icon: Icon(Icons.groups_outlined), label: "Community"),
           BottomNavigationBarItem(
               icon: Icon(Icons.smart_toy_outlined), label: "Chatbot"),
-          BottomNavigationBarItem(
-              icon: Icon(Icons.person), label: "Profile"),
+          BottomNavigationBarItem(icon: Icon(Icons.person), label: "Profile"),
         ],
       ),
     );
   }
 }
 
-// ================= TILE DESIGN =================
 class _ProfileOptionTile extends StatelessWidget {
   final IconData icon;
   final String label;
