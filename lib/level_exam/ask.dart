@@ -2,13 +2,12 @@ import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../services/auth_service.dart';
 
-
 class StartLevelPage extends StatelessWidget {
   const StartLevelPage({super.key});
 
   static const Color kBlue = Color(0xFF1E88E5); // درجة الأزرق للأزرار
 
-    Future<void> _startFromZero(BuildContext context) async {
+  Future<void> _startFromZero(BuildContext context) async {
     final prefs = await SharedPreferences.getInstance();
 
     // نخزن محليًا
@@ -24,10 +23,10 @@ class StartLevelPage extends StatelessWidget {
         await AuthService.updateMe(
           token: token,
           level: 'Beginner A1',
-          completedLevelExam: true, // 👈 هاي اللي سألت عنها
+          completedLevelExam: true,
         );
       } catch (_) {
-        // لو صار خطأ ما نكسّر التطبيق
+        // نتجاهل الخطأ عشان ما نكسّر التطبيق
       }
     }
 
@@ -35,14 +34,12 @@ class StartLevelPage extends StatelessWidget {
     Navigator.pushReplacementNamed(context, '/home_screen');
   }
 
-
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       body: Stack(
         fit: StackFit.expand,
         children: [
-          // الخلفية
           const DecoratedBox(
             decoration: BoxDecoration(
               image: DecorationImage(
@@ -51,11 +48,7 @@ class StartLevelPage extends StatelessWidget {
               ),
             ),
           ),
-
-          // طبقة شفافية خفيفة لتحسين القراءة
           Container(color: Colors.black26),
-
-          // المحتوى
           SafeArea(
             child: Padding(
               padding: const EdgeInsets.symmetric(horizontal: 24.0),
@@ -82,10 +75,7 @@ class StartLevelPage extends StatelessWidget {
                       height: 1.3,
                     ),
                   ),
-
                   const Spacer(),
-
-                  // الزر الأول: الامتحان
                   SizedBox(
                     width: double.infinity,
                     child: ElevatedButton(
@@ -112,8 +102,6 @@ class StartLevelPage extends StatelessWidget {
                     ),
                   ),
                   const SizedBox(height: 12),
-
-                  // الزر الثاني: بدء من الصفر + تعليم completed_level_exam
                   SizedBox(
                     width: double.infinity,
                     child: ElevatedButton(
@@ -136,7 +124,6 @@ class StartLevelPage extends StatelessWidget {
                       ),
                     ),
                   ),
-
                   const Spacer(),
                 ],
               ),

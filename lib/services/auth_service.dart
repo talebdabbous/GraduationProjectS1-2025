@@ -7,6 +7,7 @@ class AuthService {
   /// على جهاز حقيقي: غيّرها إلى IP اللابتوب (مثلاً 192.168.1.10)
   static const String _base = 'http://10.0.2.2:4000/api/auth';
   // static const String _base = 'https://graduationprojects1-2025-backend.onrender.com/api/auth';
+//const String baseUrl = 'http://10.0.2.2:4000';
 
   // ===== Helpers =====
   static dynamic _json(String s) {

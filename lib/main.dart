@@ -2,6 +2,7 @@
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+// ============ AUTH / LOGIN SCREENS ============
 import 'login/welcome_screen.dart';
 import 'login/login_screen.dart';
 import 'login/register_screen.dart';
@@ -9,9 +10,11 @@ import 'login/forgot_password_screen.dart';
 import 'login/reset_password_screen.dart';
 import 'login/check_auth.dart';
 
-import 'level_exam/ask.dart';
-import 'level_exam/level_exam.dart';
+// ============ LEVEL EXAM FLOW ============
+import 'level_exam/ask.dart';          // StartLevelPage
+import 'level_exam/level_exam.dart';   // LevelExamScreen
 
+// ============ HOME & PROFILE ============
 import 'Home_Screen/home_screen.dart';
 import 'profile/profile_main_screen.dart';
 import 'profile/edit_profile.dart';
@@ -34,7 +37,7 @@ class MyApp extends StatelessWidget {
         fontFamily: 'Arial',
       ),
 
-      // 👈 أول شاشة هي CheckAuth عشان تقرر لو يروح Login أو Home / AskLevel
+      // أول شاشة: CheckAuth
       initialRoute: '/',
 
       routes: {
@@ -46,10 +49,13 @@ class MyApp extends StatelessWidget {
         '/forgot': (_) => const ForgotPasswordScreen(),
 
         // ================== LEVEL EXAM FLOW ==================
-        '/ask_level': (_) => const StartLevelPage(),
-        '/level_exam': (_) => const LevelExamPage(),
+        // شاشة السؤال: تعمل امتحان مستوى ولا تبدأ من الصفر؟
+        '/ask_level': (_) => StartLevelPage(),
 
-        // ================== HOME SCREEN (من الباك عن طريق SharedPrefs) ==================
+        // شاشة الامتحان نفسها (بتسحب من الباك إند)
+        '/level_exam': (_) => LevelExamScreen(),
+
+        // ================== HOME SCREEN ==================
         '/home_screen': (_) => FutureBuilder<SharedPreferences>(
               future: SharedPreferences.getInstance(),
               builder: (ctx, snap) {
@@ -61,11 +67,9 @@ class MyApp extends StatelessWidget {
 
                 final prefs = snap.data!;
 
-                // 👇 هدول كلهم جاية من الباك (تخزنت وقت اللوج إن / التفعيل)
                 final userName = prefs.getString('user_name') ?? '';
-                // تقدر بعدين تخزنهم من الباك برضه
-                final dailyStreak = prefs.getInt('daily_streak') ?? 0; // افتراضي
-                final points = prefs.getInt('user_points') ?? 0;       // افتراضي
+                final dailyStreak = prefs.getInt('daily_streak') ?? 0;
+                final points = prefs.getInt('user_points') ?? 0;
 
                 return HomeScreen(
                   userName: userName,
@@ -87,14 +91,13 @@ class MyApp extends StatelessWidget {
 
                 final prefs = snap.data!;
 
-                // 👇 كل هدول القيم أساسهم من الباك
                 final name = prefs.getString('user_name') ?? '';
                 final email = prefs.getString('user_email') ?? '';
                 final level = prefs.getString('user_level') ?? '';
 
-                final dob = prefs.getString('user_dob'); // "YYYY-MM-DD" أو null
-                final sex = prefs.getString('user_sex'); // "Male"/"Female" أو null
-                final dailyGoal = prefs.getInt('user_dailyGoal'); // لو null في الباك، بتكون null
+                final dob = prefs.getString('user_dob');          // "YYYY-MM-DD" أو null
+                final sex = prefs.getString('user_sex');          // "Male"/"Female" أو null
+                final dailyGoal = prefs.getInt('user_dailyGoal'); // ممكن تكون null
 
                 return ProfileScreen(
                   name: name,
