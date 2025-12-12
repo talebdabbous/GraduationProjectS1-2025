@@ -32,18 +32,30 @@ class _LoginScreenState extends State<LoginScreen> {
     super.dispose();
   }
 
+  // ✅ Helper: يحوّل أي نوع لقيمة bool بشكل آمن
+  bool _toBool(dynamic v) {
+    if (v == true) return true;
+    if (v == false) return false;
+    if (v is num) return v != 0;
+    if (v is String) {
+      final s = v.trim().toLowerCase();
+      return s == 'true' || s == '1' || s == 'yes';
+    }
+    return false;
+  }
+
   /// التعامل مع نجاح تسجيل الدخول أو تفعيل الإيميل
   Future<void> _handleAuthSuccess(Map<String, dynamic> data) async {
     final token = data['token'] as String;
-    final user  = data['user'] as Map<String, dynamic>? ?? {};
+    final user = data['user'] as Map<String, dynamic>? ?? {};
 
     final prefs = await SharedPreferences.getInstance();
     await prefs.setString('token', token);
 
     // حفظ بيانات المستخدم
-    await prefs.setString('user_name',  (user['name'] ?? '') as String);
+    await prefs.setString('user_name', (user['name'] ?? '') as String);
     await prefs.setString('user_email', (user['email'] ?? '') as String);
-    await prefs.setString('user_role',  (user['role'] ?? 'student') as String);
+    await prefs.setString('user_role', (user['role'] ?? 'student') as String);
     await prefs.setString('user_level', (user['level'] ?? 'Beginner A1') as String);
 
     await prefs.setInt(
@@ -51,18 +63,28 @@ class _LoginScreenState extends State<LoginScreen> {
       (user['dailyGoal'] is int) ? user['dailyGoal'] as int : 15,
     );
 
-    await prefs.setString('user_sex',  (user['sex'] ?? 'Male') as String);
-    await prefs.setString('user_dob',  (user['dateOfBirth'] ?? '') as String);
+    await prefs.setString('user_sex', (user['sex'] ?? 'Male') as String);
+    await prefs.setString('user_dob', (user['dateOfBirth'] ?? '') as String);
     await prefs.setString(
       'user_profilePicture',
       (user['profilePicture'] ?? '') as String,
     );
 
+    // ✅ ناخذها من الباك (الداتا بيس) - ندعم أكثر من اسم محتمل
+    final completedFromBackend = _toBool(
+      user['completedLevelExam'] ??
+          user['completed_level_exam'] ??
+          user['completedExam'],
+    );
+
+    // ✅ توحيد التخزين محلياً (مفتاح واحد فقط)
+    await prefs.setBool('completedLevelExam', completedFromBackend);
+    await prefs.remove('completed_level_exam'); // تنظيف القديم لو موجود
+
     if (!mounted) return;
 
-    // الانتقال حسب حالة الامتحان المحلي
-    final completedExam = prefs.getBool('completed_level_exam') ?? false;
-    if (completedExam) {
+    // ✅ الانتقال حسب الداتا بيس
+    if (completedFromBackend) {
       Navigator.pushReplacementNamed(context, '/home_screen');
     } else {
       Navigator.pushReplacementNamed(context, '/ask_level');
@@ -170,14 +192,12 @@ class _LoginScreenState extends State<LoginScreen> {
               codeError = null;
             });
 
-            final res =
-                await AuthService.verifyEmail(email: emailVal, code: code);
+            final res = await AuthService.verifyEmail(email: emailVal, code: code);
             setLocal(() => loading = false);
 
             if (res['success'] == true) {
               final data = res['data'] as Map<String, dynamic>;
 
-              final prefs = await SharedPreferences.getInstance();
               await _handleAuthSuccess(data);
 
               timer?.cancel();
@@ -190,9 +210,7 @@ class _LoginScreenState extends State<LoginScreen> {
                 ),
               );
             } else {
-              setLocal(
-                () => codeError = res['message'] ?? 'Verification failed',
-              );
+              setLocal(() => codeError = res['message'] ?? 'Verification failed');
             }
           }
 
@@ -221,9 +239,7 @@ class _LoginScreenState extends State<LoginScreen> {
                 });
               });
             } else {
-              setLocal(
-                () => codeError = r['message'] ?? 'Could not resend code',
-              );
+              setLocal(() => codeError = r['message'] ?? 'Could not resend code');
             }
           }
 
@@ -268,9 +284,7 @@ class _LoginScreenState extends State<LoginScreen> {
               ),
               TextButton(
                 onPressed: loading || remaining > 0 ? null : resend,
-                child: Text(
-                  remaining > 0 ? 'Resend (${remaining}s)' : 'Resend',
-                ),
+                child: Text(remaining > 0 ? 'Resend (${remaining}s)' : 'Resend'),
               ),
               ElevatedButton(
                 onPressed: loading ? null : verify,
@@ -328,7 +342,6 @@ class _LoginScreenState extends State<LoginScreen> {
                             ),
                           ),
                           const SizedBox(height: 24),
-
                           TextField(
                             controller: email,
                             focusNode: emailFocus,
@@ -341,12 +354,10 @@ class _LoginScreenState extends State<LoginScreen> {
                                 borderRadius: BorderRadius.circular(12),
                               ),
                             ),
-                            onChanged: (_) =>
-                                setState(() => emailError = null),
+                            onChanged: (_) => setState(() => emailError = null),
                             textInputAction: TextInputAction.next,
                           ),
                           const SizedBox(height: 14),
-
                           TextField(
                             controller: password,
                             focusNode: passwordFocus,
@@ -355,33 +366,24 @@ class _LoginScreenState extends State<LoginScreen> {
                               labelText: "Password",
                               prefixIcon: const Icon(Icons.lock),
                               suffixIcon: IconButton(
-                                onPressed: () =>
-                                    setState(() => obscure = !obscure),
-                                icon: Icon(
-                                  obscure
-                                      ? Icons.visibility
-                                      : Icons.visibility_off,
-                                ),
+                                onPressed: () => setState(() => obscure = !obscure),
+                                icon: Icon(obscure ? Icons.visibility : Icons.visibility_off),
                               ),
                               errorText: passwordError,
                               border: OutlineInputBorder(
                                 borderRadius: BorderRadius.circular(12),
                               ),
                             ),
-                            onChanged: (_) =>
-                                setState(() => passwordError = null),
+                            onChanged: (_) => setState(() => passwordError = null),
                             textInputAction: TextInputAction.done,
                           ),
-
                           Align(
                             alignment: Alignment.centerRight,
                             child: TextButton(
-                              onPressed: () =>
-                                  Navigator.pushNamed(context, '/forgot'),
+                              onPressed: () => Navigator.pushNamed(context, '/forgot'),
                               child: const Text("Forgot password?"),
                             ),
                           ),
-
                           ElevatedButton(
                             onPressed: isLoading ? null : _login,
                             style: ElevatedButton.styleFrom(
@@ -406,34 +408,22 @@ class _LoginScreenState extends State<LoginScreen> {
                                     style: TextStyle(fontSize: 18),
                                   ),
                           ),
-
                           const SizedBox(height: 12),
-
                           Row(
                             mainAxisAlignment: MainAxisAlignment.center,
                             children: [
                               const Text("Don’t have an account? "),
                               TextButton(
-                                onPressed: () =>
-                                    Navigator.pushNamed(context, '/register'),
+                                onPressed: () => Navigator.pushNamed(context, '/register'),
                                 child: const Text("Register"),
                               ),
                             ],
                           ),
-
                           const SizedBox(height: 8),
-
-                          /// 🔵 زر Back داخل الكارد
                           TextButton.icon(
                             onPressed: () {
-                              Navigator.pushReplacementNamed(
-                                  context, '/welcome');
+                              Navigator.pushReplacementNamed(context, '/welcome');
                             },
-                            // icon: const Icon(
-                            //   Icons.arrow_back_ios_new,
-                            //   size: 18,
-                            //   color: Color(0xFF0EA5E9),
-                            // ),
                             label: const Text(
                               "Back ",
                               style: TextStyle(
@@ -443,8 +433,7 @@ class _LoginScreenState extends State<LoginScreen> {
                               ),
                             ),
                             style: TextButton.styleFrom(
-                              padding: const EdgeInsets.symmetric(
-                                  vertical: 10),
+                              padding: const EdgeInsets.symmetric(vertical: 10),
                             ),
                           ),
                         ],

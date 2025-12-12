@@ -10,9 +10,12 @@ class StartLevelPage extends StatelessWidget {
   Future<void> _startFromZero(BuildContext context) async {
     final prefs = await SharedPreferences.getInstance();
 
-    // نخزن محليًا
-    await prefs.setBool('completed_level_exam', true);
+    // ✅ خزّن محليًا (بنفس الاسم اللي صرنا نعتمده)
+    await prefs.setBool('completedLevelExam', true);
     await prefs.setString('user_level', 'Beginner A1');
+
+    // (اختياري) امسح المفتاح القديم لو كان موجود
+    await prefs.remove('completed_level_exam');
 
     // نجيب التوكن
     final token = prefs.getString('token');

@@ -3,14 +3,16 @@ import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import '../services/auth_service.dart';
+import '../services/cloudinary_service.dart';
+
 class ProfileScreen extends StatefulWidget {
   final String name;
   final String email;
   final String level;
 
-  // جايين من الباك
-  final String? dateOfBirth; // "YYYY-MM-DD"
-  final String? sex; // "Male" / "Female"
+  final String? dateOfBirth;
+  final String? sex;
   final int? dailyGoal;
 
   const ProfileScreen({
@@ -29,7 +31,9 @@ class ProfileScreen extends StatefulWidget {
 
 class _ProfileScreenState extends State<ProfileScreen> {
   int _index = 3;
-  File? _profileImage;
+
+  File? _profileImageFile;       // صورة محلية (بعد ما يختارها)
+  String? _profileImageUrl;      // رابط الصورة من الباك/المحلي
 
   late String _name;
   late String _email;
@@ -37,6 +41,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
   String? _dateOfBirth;
   String? _sex;
   int? _dailyGoal;
+
+  bool _uploadingPhoto = false;
 
   @override
   void initState() {
@@ -47,9 +53,89 @@ class _ProfileScreenState extends State<ProfileScreen> {
     _dateOfBirth = widget.dateOfBirth;
     _sex = widget.sex;
     _dailyGoal = widget.dailyGoal;
+
+    _loadProfilePictureFromPrefs();
   }
 
-  // ========================= تغيير الصورة =========================
+  Future<void> _loadProfilePictureFromPrefs() async {
+    final prefs = await SharedPreferences.getInstance();
+    final url = prefs.getString('user_profilePicture');
+    if (!mounted) return;
+    setState(() => _profileImageUrl = (url != null && url.isNotEmpty) ? url : null);
+  }
+
+  // ========================= رفع الصورة + حفظها بالباك =========================
+  Future<void> _pickAndUpload(ImageSource source) async {
+    final picked = await ImagePicker().pickImage(source: source, imageQuality: 85);
+    if (picked == null) return;
+
+    final file = File(picked.path);
+
+    // اعرضها فورًا محليًا
+    setState(() {
+      _profileImageFile = file;
+      _uploadingPhoto = true;
+    });
+
+    try {
+      // 1) ارفع على Cloudinary
+      final url = await CloudinaryService.uploadImage(file);
+      if (url == null) {
+        if (!mounted) return;
+        setState(() => _uploadingPhoto = false);
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Upload failed. Try again.')),
+        );
+        return;
+      }
+
+      // 2) خزّن في الباك (profilePicture)
+      final prefs = await SharedPreferences.getInstance();
+      final token = prefs.getString('token') ?? '';
+      if (token.isEmpty) {
+        if (!mounted) return;
+        setState(() => _uploadingPhoto = false);
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Not logged in')),
+        );
+        return;
+      }
+
+      final res = await AuthService.updateMe(
+        token: token,
+        profilePicture: url,
+      );
+
+      if (!mounted) return;
+
+      if (res['success'] == true) {
+        // 3) خزّن محليًا + حدّث UI
+        await prefs.setString('user_profilePicture', url);
+
+        setState(() {
+          _profileImageUrl = url;
+          _profileImageFile = null; // خلّي العرض من NetworkImage
+          _uploadingPhoto = false;
+        });
+
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('✅ Profile picture updated')),
+        );
+      } else {
+        setState(() => _uploadingPhoto = false);
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(res['message']?.toString() ?? 'Update failed')),
+        );
+      }
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => _uploadingPhoto = false);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Error: $e')),
+      );
+    }
+  }
+
   Future<void> _changeProfilePhoto() async {
     showModalBottomSheet(
       context: context,
@@ -76,26 +162,16 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   leading: const Icon(Icons.photo_library),
                   title: const Text("Choose from Gallery"),
                   onTap: () async {
-                    final picked = await ImagePicker().pickImage(
-                      source: ImageSource.gallery,
-                    );
-                    if (picked != null) {
-                      setState(() => _profileImage = File(picked.path));
-                    }
                     Navigator.pop(context);
+                    await _pickAndUpload(ImageSource.gallery);
                   },
                 ),
                 ListTile(
                   leading: const Icon(Icons.camera_alt),
                   title: const Text("Take a Photo"),
                   onTap: () async {
-                    final picked = await ImagePicker().pickImage(
-                      source: ImageSource.camera,
-                    );
-                    if (picked != null) {
-                      setState(() => _profileImage = File(picked.path));
-                    }
                     Navigator.pop(context);
+                    await _pickAndUpload(ImageSource.camera);
                   },
                 ),
               ],
@@ -119,8 +195,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
     await prefs.remove('user_sex');
     await prefs.remove('user_dob');
     await prefs.remove('user_profilePicture');
-
-    // ✅ مهم عشان ما يضل الكاش يوديك عالهوم
     await prefs.remove('completed_level_exam');
 
     if (!mounted) return;
@@ -132,12 +206,17 @@ class _ProfileScreenState extends State<ProfileScreen> {
     );
   }
 
-  // =================================================================
+  ImageProvider? _avatarProvider() {
+    if (_profileImageFile != null) return FileImage(_profileImageFile!);
+    if (_profileImageUrl != null && _profileImageUrl!.isNotEmpty) {
+      return NetworkImage(_profileImageUrl!);
+    }
+    return null;
+  }
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final primary = theme.colorScheme.primary;
+    final primary = Theme.of(context).colorScheme.primary;
 
     return Scaffold(
       backgroundColor: const Color(0xFFF3F5F7),
@@ -146,10 +225,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
         centerTitle: true,
         elevation: 0,
         backgroundColor: const Color(0xFFF3F5F7),
-        title: const Text(
-          "Profile",
-          style: TextStyle(fontWeight: FontWeight.w600),
-        ),
+        title: const Text("Profile", style: TextStyle(fontWeight: FontWeight.w600)),
       ),
       body: SafeArea(
         child: SingleChildScrollView(
@@ -163,18 +239,17 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   CircleAvatar(
                     radius: 70,
                     backgroundColor: Colors.grey.shade300,
-                    backgroundImage:
-                        _profileImage != null ? FileImage(_profileImage!) : null,
-                    child: _profileImage == null
-                        ? const Icon(Icons.person,
-                            size: 70, color: Colors.white)
+                    backgroundImage: _avatarProvider(),
+                    child: _avatarProvider() == null
+                        ? const Icon(Icons.person, size: 70, color: Colors.white)
                         : null,
                   ),
+
                   Positioned(
                     bottom: 6,
                     right: 6,
                     child: GestureDetector(
-                      onTap: _changeProfilePhoto,
+                      onTap: _uploadingPhoto ? null : _changeProfilePhoto,
                       child: Container(
                         padding: const EdgeInsets.all(6),
                         decoration: BoxDecoration(
@@ -182,8 +257,13 @@ class _ProfileScreenState extends State<ProfileScreen> {
                           shape: BoxShape.circle,
                           border: Border.all(color: Colors.white, width: 2),
                         ),
-                        child: const Icon(Icons.edit,
-                            size: 18, color: Colors.white),
+                        child: _uploadingPhoto
+                            ? const SizedBox(
+                                width: 18,
+                                height: 18,
+                                child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                              )
+                            : const Icon(Icons.edit, size: 18, color: Colors.white),
                       ),
                     ),
                   ),
@@ -192,19 +272,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
               const SizedBox(height: 14),
 
-              Text(
-                _name,
-                style: const TextStyle(
-                  fontSize: 22,
-                  fontWeight: FontWeight.w700,
-                ),
-              ),
+              Text(_name, style: const TextStyle(fontSize: 22, fontWeight: FontWeight.w700)),
               const SizedBox(height: 4),
-
-              Text(
-                _level,
-                style: TextStyle(fontSize: 14, color: Colors.grey.shade600),
-              ),
+              Text(_level, style: TextStyle(fontSize: 14, color: Colors.grey.shade600)),
 
               const SizedBox(height: 30),
 
@@ -247,11 +317,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
                           setState(() {
                             _name = (result['name'] ?? _name) as String;
                             _email = (result['email'] ?? _email) as String;
-                            _dateOfBirth =
-                                result['dob'] as String? ?? _dateOfBirth;
+                            _dateOfBirth = result['dob'] as String? ?? _dateOfBirth;
                             _sex = result['sex'] as String? ?? _sex;
-                            _dailyGoal =
-                                result['dailyGoal'] as int? ?? _dailyGoal;
+                            _dailyGoal = result['dailyGoal'] as int? ?? _dailyGoal;
                             _level = (result['level'] ?? _level) as String;
                           });
                         }
@@ -283,10 +351,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                       child: OutlinedButton.icon(
                         onPressed: _logout,
                         icon: const Icon(Icons.logout),
-                        label: const Text(
-                          "Sign Out",
-                          style: TextStyle(fontSize: 16),
-                        ),
+                        label: const Text("Sign Out", style: TextStyle(fontSize: 16)),
                         style: OutlinedButton.styleFrom(
                           foregroundColor: primary,
                           side: BorderSide(color: primary, width: 1.5),
@@ -316,12 +381,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
           setState(() => _index = i);
         },
         items: const [
-          BottomNavigationBarItem(
-              icon: Icon(Icons.home_outlined), label: "Home"),
-          BottomNavigationBarItem(
-              icon: Icon(Icons.groups_outlined), label: "Community"),
-          BottomNavigationBarItem(
-              icon: Icon(Icons.smart_toy_outlined), label: "Chatbot"),
+          BottomNavigationBarItem(icon: Icon(Icons.home_outlined), label: "Home"),
+          BottomNavigationBarItem(icon: Icon(Icons.groups_outlined), label: "Community"),
+          BottomNavigationBarItem(icon: Icon(Icons.smart_toy_outlined), label: "Chatbot"),
           BottomNavigationBarItem(icon: Icon(Icons.person), label: "Profile"),
         ],
       ),
@@ -365,10 +427,7 @@ class _ProfileOptionTile extends StatelessWidget {
               Expanded(
                 child: Text(
                   label,
-                  style: const TextStyle(
-                    fontSize: 16,
-                    fontWeight: FontWeight.w500,
-                  ),
+                  style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w500),
                 ),
               ),
               const Icon(Icons.chevron_right, color: Colors.grey),

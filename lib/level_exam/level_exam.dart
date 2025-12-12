@@ -66,8 +66,13 @@ class _LevelExamScreenState extends State<LevelExamScreen> {
       final prettyLevel = _mapLevelCodeToLabel(levelCode);
 
       final prefs = await SharedPreferences.getInstance();
-      await prefs.setBool('completed_level_exam', true);
+
+      // ✅ المفتاح الصحيح (بدل completed_level_exam)
+      await prefs.setBool('completedLevelExam', true);
       await prefs.setString('user_level', prettyLevel);
+
+      // (اختياري) امسح المفتاح القديم لو كان موجود
+      await prefs.remove('completed_level_exam');
 
       final token = prefs.getString('token');
       if (token != null && token.isNotEmpty) {
@@ -197,7 +202,6 @@ class _LevelExamScreenState extends State<LevelExamScreen> {
                 children: [
                   const SizedBox(height: 8),
 
-                  // العنوان الصغير + progress bar
                   Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
@@ -229,7 +233,6 @@ class _LevelExamScreenState extends State<LevelExamScreen> {
                   ),
                   const SizedBox(height: 16),
 
-                  // صندوق السؤال - أكبر، مع دعم listening
                   Container(
                     width: double.infinity,
                     height: 190,
@@ -259,8 +262,7 @@ class _LevelExamScreenState extends State<LevelExamScreen> {
                               IconButton(
                                 iconSize: 32,
                                 onPressed: () => _playAudio(q.mediaUrl!),
-                                icon:
-                                    const Icon(Icons.volume_up_rounded),
+                                icon: const Icon(Icons.volume_up_rounded),
                                 color: _primaryColor(),
                               ),
                               const Text(
@@ -288,7 +290,6 @@ class _LevelExamScreenState extends State<LevelExamScreen> {
 
                   const SizedBox(height: 30),
 
-                  // الخيارات
                   Expanded(
                     child: ListView.builder(
                       padding: EdgeInsets.zero,
@@ -298,11 +299,9 @@ class _LevelExamScreenState extends State<LevelExamScreen> {
                         final selected = q.selectedIndex == optIndex;
 
                         return Padding(
-                          padding:
-                              const EdgeInsets.only(bottom: 12.0),
+                          padding: const EdgeInsets.only(bottom: 12.0),
                           child: InkWell(
-                            borderRadius:
-                                BorderRadius.circular(999),
+                            borderRadius: BorderRadius.circular(999),
                             onTap: () {
                               setState(() {
                                 q.selectedIndex = optIndex;
@@ -317,8 +316,7 @@ class _LevelExamScreenState extends State<LevelExamScreen> {
                                 color: selected
                                     ? Colors.white
                                     : Colors.white.withOpacity(0.95),
-                                borderRadius:
-                                    BorderRadius.circular(999),
+                                borderRadius: BorderRadius.circular(999),
                                 border: Border.all(
                                   color: selected
                                       ? _primaryColor()
@@ -327,8 +325,7 @@ class _LevelExamScreenState extends State<LevelExamScreen> {
                                 ),
                                 boxShadow: [
                                   BoxShadow(
-                                    color: Colors.black
-                                        .withOpacity(0.04),
+                                    color: Colors.black.withOpacity(0.04),
                                     blurRadius: 8,
                                     offset: const Offset(0, 3),
                                   ),
@@ -359,8 +356,7 @@ class _LevelExamScreenState extends State<LevelExamScreen> {
                                       style: TextStyle(
                                         fontSize: 16,
                                         fontWeight: FontWeight.w500,
-                                        color: Colors
-                                            .grey.shade900,
+                                        color: Colors.grey.shade900,
                                       ),
                                     ),
                                   ),
@@ -380,20 +376,16 @@ class _LevelExamScreenState extends State<LevelExamScreen> {
                       Expanded(
                         child: OutlinedButton(
                           style: OutlinedButton.styleFrom(
-                            side: BorderSide(
-                                color: Colors.grey.shade400),
+                            side: BorderSide(color: Colors.grey.shade400),
                             foregroundColor: Colors.grey.shade800,
                             padding:
-                                const EdgeInsets.symmetric(
-                                    vertical: 12),
+                                const EdgeInsets.symmetric(vertical: 12),
                             shape: RoundedRectangleBorder(
-                              borderRadius:
-                                  BorderRadius.circular(999),
+                              borderRadius: BorderRadius.circular(999),
                             ),
                           ),
-                          onPressed: _currentIndex == 0
-                              ? null
-                              : () => _goPrevious(),
+                          onPressed:
+                              _currentIndex == 0 ? null : () => _goPrevious(),
                           child: const Text('Previous'),
                         ),
                       ),
@@ -404,11 +396,9 @@ class _LevelExamScreenState extends State<LevelExamScreen> {
                             backgroundColor: _primaryColor(),
                             foregroundColor: Colors.white,
                             padding:
-                                const EdgeInsets.symmetric(
-                                    vertical: 12),
+                                const EdgeInsets.symmetric(vertical: 12),
                             shape: RoundedRectangleBorder(
-                              borderRadius:
-                                  BorderRadius.circular(999),
+                              borderRadius: BorderRadius.circular(999),
                             ),
                           ),
                           onPressed: _submitting
@@ -418,15 +408,12 @@ class _LevelExamScreenState extends State<LevelExamScreen> {
                               ? const SizedBox(
                                   height: 20,
                                   width: 20,
-                                  child:
-                                      CircularProgressIndicator(
+                                  child: CircularProgressIndicator(
                                     strokeWidth: 2,
                                     color: Colors.white,
                                   ),
                                 )
-                              : Text(isLast
-                                  ? 'Submit Test'
-                                  : 'Next'),
+                              : Text(isLast ? 'Submit Test' : 'Next'),
                         ),
                       ),
                     ],
