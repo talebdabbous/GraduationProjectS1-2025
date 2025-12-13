@@ -25,6 +25,40 @@ class _LevelExamScreenState extends State<LevelExamScreen> {
   void initState() {
     super.initState();
     _futureQuestions = LevelExamService.fetchQuestions();
+    
+    // إعداد AudioPlayer
+    _audioPlayer.setReleaseMode(ReleaseMode.stop);
+    _audioPlayer.setPlayerMode(PlayerMode.mediaPlayer);
+    
+    // ضبط مستوى الصوت إلى أقصى حد (1.0 = 100%)
+    _audioPlayer.setVolume(1.0);
+    
+    // ضبط التوازن (0.0 = وسط)
+    _audioPlayer.setBalance(0.0);
+    
+    // استمع لحالة التشغيل
+    _audioPlayer.onPlayerStateChanged.listen((state) {
+      print('🎵 Player state: $state');
+      if (state == PlayerState.playing) {
+        print('✅ Audio is now playing!');
+      } else if (state == PlayerState.completed) {
+        print('✅ Audio playback completed');
+      } else if (state == PlayerState.stopped) {
+        print('⏹️ Audio stopped');
+      } else if (state == PlayerState.paused) {
+        print('⏸️ Audio paused');
+      }
+    });
+    
+    // استمع للأخطاء
+    _audioPlayer.onLog.listen((log) {
+      print('🎵 AudioPlayer log: $log');
+    });
+    
+    // استمع لأخطاء التشغيل
+    _audioPlayer.onPlayerComplete.listen((_) {
+      print('✅ Audio playback finished');
+    });
   }
 
   @override
@@ -42,13 +76,84 @@ class _LevelExamScreenState extends State<LevelExamScreen> {
   }
 
   Future<void> _playAudio(String url) async {
-    try {
-      await _stopAudio();
-      await _audioPlayer.play(UrlSource(url));
-    } catch (_) {
+    print('🎵 Attempting to play audio from: $url');
+    
+    if (url.isEmpty) {
+      print('❌ Audio URL is empty!');
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Could not play audio')),
+        const SnackBar(content: Text('Audio URL is empty')),
+      );
+      return;
+    }
+
+    try {
+      await _stopAudio();
+      
+      // تحقق من أن URL صحيح
+      if (!url.startsWith('http://') && !url.startsWith('https://')) {
+        print('❌ Invalid audio URL format: $url');
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Invalid audio URL: $url')),
+        );
+        return;
+      }
+      
+      // تأكد من مستوى الصوت (1.0 = 100%)
+      await _audioPlayer.setVolume(1.0);
+      print('🔊 Volume set to 1.0 (100%)');
+      
+      // ضبط التوازن
+      await _audioPlayer.setBalance(0.0);
+      
+      // أظهر رسالة للمستخدم
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('🔊 Playing audio...'),
+            duration: Duration(seconds: 1),
+          ),
+        );
+      }
+      
+      print('🎵 Playing audio directly...');
+      await _audioPlayer.play(UrlSource(url));
+      print('✅ Play command sent successfully');
+      
+      // تأكد من مستوى الصوت مرة أخرى بعد بدء التشغيل
+      Future.delayed(const Duration(milliseconds: 100), () async {
+        await _audioPlayer.setVolume(1.0);
+        print('🔊 Volume confirmed at 1.0 after playback start');
+      });
+      
+      // انتظر قليلاً ثم تحقق من الحالة
+      Future.delayed(const Duration(milliseconds: 500), () {
+        print('🎵 Player state after 500ms: ${_audioPlayer.state}');
+      });
+      
+      // تحقق من الحالة بعد ثانية
+      Future.delayed(const Duration(seconds: 1), () {
+        print('🎵 Player state after 1s: ${_audioPlayer.state}');
+        if (_audioPlayer.state == PlayerState.completed) {
+          print('⚠️ Audio completed very quickly - might be empty or very short file');
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(
+                content: Text('⚠️ Audio file might be empty or very short'),
+                duration: Duration(seconds: 2),
+              ),
+            );
+          }
+        }
+      });
+      
+    } catch (e) {
+      print('❌ Audio playback error: $e');
+      print('❌ Error details: ${e.toString()}');
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Could not play audio: $e')),
       );
     }
   }
@@ -206,6 +311,14 @@ class _LevelExamScreenState extends State<LevelExamScreen> {
             final total = questions.length;
             final q = questions[_currentIndex];
             final isLast = _currentIndex == total - 1;
+            
+            // طباعة معلومات السؤال للتشخيص
+            print('📝 Question ${_currentIndex + 1}: type=${q.type}, text="${q.questionTextEN}", isEmpty=${(q.questionTextEN ?? '').isEmpty}');
+            if (q.type == 'writing') {
+              print('✍️ Writing question detected - will show TextField');
+            } else {
+              print('📋 MCQ question - will show options (count: ${q.options.length})');
+            }
 
             // Sync writing controller with current question's answer
             if (q.type == 'writing') {
@@ -254,11 +367,11 @@ class _LevelExamScreenState extends State<LevelExamScreen> {
 
                   const SizedBox(height: 16),
 
-                  // صندوق السؤال الكبير + listening button
+                  // صندوق السؤال الكبير + listening button + image
                   Container(
                     width: double.infinity,
-                    height: 190,
                     padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 20),
+                    constraints: const BoxConstraints(minHeight: 190),
                     decoration: BoxDecoration(
                       color: Colors.white,
                       borderRadius: BorderRadius.circular(24),
@@ -273,12 +386,35 @@ class _LevelExamScreenState extends State<LevelExamScreen> {
                     child: Column(
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: [
-                        if (q.type == 'listening' && (q.mediaUrl ?? '').isNotEmpty)
+                        if (q.type == 'listening' && ((q.audioUrl ?? '').isNotEmpty || (q.mediaUrl ?? '').isNotEmpty))
                           Column(
                             children: [
                               IconButton(
                                 iconSize: 32,
-                                onPressed: () => _playAudio(q.mediaUrl!),
+                                onPressed: () {
+                                  // ✅ استخدم audioUrl أولاً (الصوت الجديد من قاعدة البيانات)
+                                  // إذا لم يكن موجوداً أو كان رابط غير صحيح، استخدم mediaUrl القديم
+                                  String? audioToPlay;
+                                  if ((q.audioUrl ?? '').isNotEmpty && 
+                                      q.audioUrl!.startsWith('http') && 
+                                      !q.audioUrl!.contains('...')) {
+                                    // audioUrl موجود وصحيح
+                                    audioToPlay = q.audioUrl!;
+                                  } else if ((q.mediaUrl ?? '').isNotEmpty) {
+                                    // استخدم mediaUrl
+                                    audioToPlay = q.mediaUrl!;
+                                  }
+                                  
+                                  if (audioToPlay != null) {
+                                    print('🔊 Playing audio from: $audioToPlay');
+                                    _playAudio(audioToPlay);
+                                  } else {
+                                    print('❌ No valid audio URL found');
+                                    ScaffoldMessenger.of(context).showSnackBar(
+                                      const SnackBar(content: Text('No audio available')),
+                                    );
+                                  }
+                                },
                                 icon: const Icon(Icons.volume_up_rounded),
                                 color: _primaryColor(),
                               ),
@@ -286,8 +422,49 @@ class _LevelExamScreenState extends State<LevelExamScreen> {
                               const SizedBox(height: 12),
                             ],
                           ),
+                        // ✅ عرض الصورة فقط في السؤال الثاني (index 1)
+                        if (_currentIndex == 1 && (q.imageUrl ?? '').isNotEmpty && q.imageUrl!.startsWith('http'))
+                          Column(
+                            children: [
+                              ClipRRect(
+                                borderRadius: BorderRadius.circular(16),
+                                child: Image.network(
+                                  q.imageUrl!,
+                                  width: double.infinity,
+                                  height: 200,
+                                  fit: BoxFit.cover,
+                                  errorBuilder: (context, error, stackTrace) {
+                                    return Container(
+                                      height: 200,
+                                      color: Colors.grey.shade200,
+                                      child: const Icon(Icons.image_not_supported, size: 50, color: Colors.grey),
+                                    );
+                                  },
+                                  loadingBuilder: (context, child, loadingProgress) {
+                                    if (loadingProgress == null) return child;
+                                    return Container(
+                                      height: 200,
+                                      color: Colors.grey.shade100,
+                                      child: Center(
+                                        child: CircularProgressIndicator(
+                                          value: loadingProgress.expectedTotalBytes != null
+                                              ? loadingProgress.cumulativeBytesLoaded / loadingProgress.expectedTotalBytes!
+                                              : null,
+                                        ),
+                                      ),
+                                    );
+                                  },
+                                ),
+                              ),
+                              const SizedBox(height: 16),
+                            ],
+                          ),
                         Text(
-                          q.questionTextEN,
+                          (q.questionTextEN ?? '').isNotEmpty 
+                              ? q.questionTextEN 
+                              : (q.type == 'writing' 
+                                  ? 'Write your answer:' 
+                                  : 'Question ${_currentIndex + 1}'),
                           textAlign: TextAlign.center,
                           textDirection: TextDirection.rtl,
                           style: const TextStyle(fontSize: 20, height: 1.5, fontWeight: FontWeight.w700),
@@ -315,19 +492,34 @@ class _LevelExamScreenState extends State<LevelExamScreen> {
                                   ),
                                 ],
                               ),
-                              child: TextField(
-                                controller: _writingController,
-                                textDirection: TextDirection.rtl,
-                                minLines: 3,
-                                maxLines: 5,
-                                decoration: const InputDecoration(
-                                  labelText: 'Your answer',
-                                  border: OutlineInputBorder(),
-                                  alignLabelWithHint: true,
-                                ),
-                                onChanged: (val) {
-                                  q.writtenAnswer = val;
-                                },
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    'Write your answer:',
+                                    style: TextStyle(
+                                      fontSize: 16,
+                                      fontWeight: FontWeight.w600,
+                                      color: Colors.grey.shade700,
+                                    ),
+                                    textDirection: TextDirection.rtl,
+                                  ),
+                                  const SizedBox(height: 12),
+                                  TextField(
+                                    controller: _writingController,
+                                    textDirection: TextDirection.rtl,
+                                    minLines: 5,
+                                    maxLines: 8,
+                                    decoration: const InputDecoration(
+                                      hintText: 'Type your answer here...',
+                                      border: OutlineInputBorder(),
+                                      alignLabelWithHint: true,
+                                    ),
+                                    onChanged: (val) {
+                                      q.writtenAnswer = val;
+                                    },
+                                  ),
+                                ],
                               ),
                             ),
                           )

@@ -20,6 +20,8 @@ class LevelQuestion {
   final String levelTag;
   final List<LevelOption> options;
   final String? mediaUrl;
+  final String? audioUrl; // ✅ الصوت الجديد من قاعدة البيانات
+  final String? imageUrl; // ✅ صورة السؤال
 
   int? selectedIndex;     // للـ MCQ
   String? writtenAnswer;  // ✅ للـ writing
@@ -32,6 +34,8 @@ class LevelQuestion {
     required this.levelTag,
     required this.options,
     this.mediaUrl,
+    this.audioUrl,
+    this.imageUrl,
     this.selectedIndex,
     this.writtenAnswer,
   });
@@ -47,6 +51,8 @@ class LevelQuestion {
           .map((o) => LevelOption.fromJson(o))
           .toList(),
       mediaUrl: json['mediaUrl'],
+      audioUrl: json['audioUrl'], // ✅ جلب الصوت الجديد
+      imageUrl: json['imageUrl'], // ✅ جلب صورة السؤال
     );
   }
 }
