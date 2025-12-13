@@ -1,36 +1,38 @@
 import 'dart:convert';
 import 'package:http/http.dart' as http;
+
 import '../level_exam/level_question.dart';
 
 class LevelExamService {
-  // لأنك على الإيموليتر → لازم 10.0.2.2 بدل localhost
-  static const String baseUrl = 'http://10.0.2.2:4000';
+  static const String baseUrl = 'http://10.0.2.2:4000'; // emulator
 
   static Future<List<LevelQuestion>> fetchQuestions() async {
     final url = Uri.parse('$baseUrl/api/placement/questions');
     final response = await http.get(url);
 
     if (response.statusCode == 200) {
-      final jsonBody = json.decode(response.body);
-      final List list = jsonBody['data'];
-      return list.map((e) => LevelQuestion.fromJson(e)).toList();
-    } else {
-      throw Exception('Failed to load questions: ${response.statusCode}');
+      final body = json.decode(response.body);
+      final List data = body['data'] as List;
+      return data.map((e) => LevelQuestion.fromJson(e)).toList();
     }
+    throw Exception('Failed to load questions: ${response.statusCode}');
   }
 
-  static Future<Map<String, dynamic>> submitAnswers(
-      List<LevelQuestion> questions) async {
+  static Future<Map<String, dynamic>> submitAnswers(List<LevelQuestion> questions) async {
     final url = Uri.parse('$baseUrl/api/placement/submit');
 
     final answers = questions.map((q) {
-      final selected = q.selectedIndex;
-      final selectedKey =
-          selected != null ? q.options[selected].key : null;
+      String? selectedKey;
+      if (q.selectedIndex != null &&
+          q.selectedIndex! >= 0 &&
+          q.selectedIndex! < q.options.length) {
+        selectedKey = q.options[q.selectedIndex!].key;
+      }
 
       return {
         'questionId': q.id,
         'selectedKey': selectedKey,
+        'writtenAnswer': q.writtenAnswer, // ✅ مهم للـ writing
       };
     }).toList();
 
@@ -41,10 +43,9 @@ class LevelExamService {
     );
 
     if (response.statusCode == 200) {
-      final jsonBody = json.decode(response.body);
-      return jsonBody['data'];
-    } else {
-      throw Exception('Failed to submit answers: ${response.statusCode}');
+      final body = json.decode(response.body);
+      return body['data'] as Map<String, dynamic>;
     }
+    throw Exception('Failed to submit answers: ${response.statusCode}');
   }
 }

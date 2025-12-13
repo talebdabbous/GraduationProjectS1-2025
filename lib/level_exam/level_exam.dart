@@ -16,9 +16,10 @@ class LevelExamScreen extends StatefulWidget {
 class _LevelExamScreenState extends State<LevelExamScreen> {
   late Future<List<LevelQuestion>> _futureQuestions;
   bool _submitting = false;
-  int _currentIndex = 0; // السؤال الحالي
+  int _currentIndex = 0;
 
-  final AudioPlayer _audioPlayer = AudioPlayer(); // للصوت
+  final AudioPlayer _audioPlayer = AudioPlayer();
+  final TextEditingController _writingController = TextEditingController();
 
   @override
   void initState() {
@@ -28,15 +29,23 @@ class _LevelExamScreenState extends State<LevelExamScreen> {
 
   @override
   void dispose() {
+    _audioPlayer.stop();
     _audioPlayer.dispose();
+    _writingController.dispose();
     super.dispose();
+  }
+
+  Future<void> _stopAudio() async {
+    try {
+      await _audioPlayer.stop();
+    } catch (_) {}
   }
 
   Future<void> _playAudio(String url) async {
     try {
-      await _audioPlayer.stop();
+      await _stopAudio();
       await _audioPlayer.play(UrlSource(url));
-    } catch (e) {
+    } catch (_) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Could not play audio')),
@@ -57,22 +66,19 @@ class _LevelExamScreenState extends State<LevelExamScreen> {
   }
 
   Future<void> _submit(List<LevelQuestion> questions) async {
+    await _stopAudio();
     setState(() => _submitting = true);
+
     try {
       final result = await LevelExamService.submitAnswers(questions);
 
-      final levelCode = result['level'] as String; // A1/A2/B1
+      final levelCode = result['level'] as String;
       final percentage = (result['percentage'] as num).toDouble();
       final prettyLevel = _mapLevelCodeToLabel(levelCode);
 
       final prefs = await SharedPreferences.getInstance();
-
-      // ✅ المفتاح الصحيح (بدل completed_level_exam)
-      await prefs.setBool('completedLevelExam', true);
+      await prefs.setBool('completed_level_exam', true);
       await prefs.setString('user_level', prettyLevel);
-
-      // (اختياري) امسح المفتاح القديم لو كان موجود
-      await prefs.remove('completed_level_exam');
 
       final token = prefs.getString('token');
       if (token != null && token.isNotEmpty) {
@@ -116,32 +122,42 @@ class _LevelExamScreenState extends State<LevelExamScreen> {
     }
   }
 
-  void _goNext(List<LevelQuestion> questions) {
-    final currentQuestion = questions[_currentIndex];
+  void _goNext(List<LevelQuestion> questions) async {
+    await _stopAudio();
 
-    if (currentQuestion.selectedIndex == null) {
+    final q = questions[_currentIndex];
+
+    // ✅ تحقق حسب النوع
+    final hasAnswer = q.type == 'writing'
+        ? (q.writtenAnswer != null && q.writtenAnswer!.trim().isNotEmpty)
+        : (q.selectedIndex != null);
+
+    if (!hasAnswer) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Please choose an answer first')),
+        const SnackBar(content: Text('Please answer the question first')),
       );
       return;
     }
 
     final isLast = _currentIndex == questions.length - 1;
-
+    final total = questions.length;
+    final isLastTwo = _currentIndex >= total - 2;
+    
     if (isLast) {
       _submit(questions);
     } else {
-      setState(() {
-        _currentIndex += 1;
-      });
+      // إذا كان من آخر سؤالين وكان من نوع writing، افرغ النص عند الانتقال للسؤال التالي
+      if (isLastTwo && q.type == 'writing') {
+        _writingController.clear();
+      }
+      setState(() => _currentIndex += 1);
     }
   }
 
-  void _goPrevious() {
+  void _goPrevious() async {
+    await _stopAudio();
     if (_currentIndex == 0) return;
-    setState(() {
-      _currentIndex -= 1;
-    });
+    setState(() => _currentIndex -= 1);
   }
 
   Color _backgroundColor() => const Color(0xFFE6F4FF);
@@ -169,12 +185,7 @@ class _LevelExamScreenState extends State<LevelExamScreen> {
         backgroundColor: _backgroundColor(),
         elevation: 0,
         centerTitle: true,
-        title: const Text(
-          'Placement Test',
-          style: TextStyle(
-            fontWeight: FontWeight.bold,
-          ),
-        ),
+        title: const Text('Placement Test', style: TextStyle(fontWeight: FontWeight.bold)),
       ),
       body: SafeArea(
         child: FutureBuilder<List<LevelQuestion>>(
@@ -196,6 +207,19 @@ class _LevelExamScreenState extends State<LevelExamScreen> {
             final q = questions[_currentIndex];
             final isLast = _currentIndex == total - 1;
 
+            // Sync writing controller with current question's answer
+            if (q.type == 'writing') {
+              final currentText = _writingController.text;
+              final savedAnswer = q.writtenAnswer ?? '';
+              if (currentText != savedAnswer) {
+                WidgetsBinding.instance.addPostFrameCallback((_) {
+                  if (mounted) {
+                    _writingController.text = savedAnswer;
+                  }
+                });
+              }
+            }
+
             return Padding(
               padding: const EdgeInsets.symmetric(horizontal: 16.0),
               child: Column(
@@ -207,39 +231,34 @@ class _LevelExamScreenState extends State<LevelExamScreen> {
                     children: [
                       Text(
                         'Question ${_currentIndex + 1} of $total',
-                        style: TextStyle(
-                          color: Colors.grey.shade800,
-                          fontWeight: FontWeight.w600,
-                        ),
+                        style: TextStyle(color: Colors.grey.shade800, fontWeight: FontWeight.w600),
                       ),
                       Text(
                         '${((_currentIndex + 1) / total * 100).round()}%',
-                        style: TextStyle(
-                          color: Colors.grey.shade600,
-                        ),
+                        style: TextStyle(color: Colors.grey.shade600),
                       ),
                     ],
                   ),
+
                   const SizedBox(height: 8),
+
                   ClipRRect(
                     borderRadius: BorderRadius.circular(999),
                     child: LinearProgressIndicator(
                       value: (_currentIndex + 1) / total,
                       minHeight: 8,
                       backgroundColor: Colors.white,
-                      valueColor:
-                          AlwaysStoppedAnimation<Color>(_primaryColor()),
+                      valueColor: AlwaysStoppedAnimation<Color>(_primaryColor()),
                     ),
                   ),
+
                   const SizedBox(height: 16),
 
+                  // صندوق السؤال الكبير + listening button
                   Container(
                     width: double.infinity,
                     height: 190,
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 20,
-                      vertical: 20,
-                    ),
+                    padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 20),
                     decoration: BoxDecoration(
                       color: Colors.white,
                       borderRadius: BorderRadius.circular(24),
@@ -254,9 +273,7 @@ class _LevelExamScreenState extends State<LevelExamScreen> {
                     child: Column(
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: [
-                        if (q.type == 'listening' &&
-                            q.mediaUrl != null &&
-                            q.mediaUrl!.isNotEmpty)
+                        if (q.type == 'listening' && (q.mediaUrl ?? '').isNotEmpty)
                           Column(
                             children: [
                               IconButton(
@@ -265,24 +282,15 @@ class _LevelExamScreenState extends State<LevelExamScreen> {
                                 icon: const Icon(Icons.volume_up_rounded),
                                 color: _primaryColor(),
                               ),
-                              const Text(
-                                'Tap to listen',
-                                style: TextStyle(
-                                  fontSize: 14,
-                                  color: Colors.grey,
-                                ),
-                              ),
+                              const Text('Tap to listen', style: TextStyle(fontSize: 14, color: Colors.grey)),
                               const SizedBox(height: 12),
                             ],
                           ),
                         Text(
                           q.questionTextEN,
                           textAlign: TextAlign.center,
-                          style: const TextStyle(
-                            fontSize: 20,
-                            height: 1.5,
-                            fontWeight: FontWeight.w700,
-                          ),
+                          textDirection: TextDirection.rtl,
+                          style: const TextStyle(fontSize: 20, height: 1.5, fontWeight: FontWeight.w700),
                         ),
                       ],
                     ),
@@ -290,39 +298,15 @@ class _LevelExamScreenState extends State<LevelExamScreen> {
 
                   const SizedBox(height: 30),
 
+                  // ✅ MCQ or Writing
                   Expanded(
-                    child: ListView.builder(
-                      padding: EdgeInsets.zero,
-                      itemCount: q.options.length,
-                      itemBuilder: (context, optIndex) {
-                        final opt = q.options[optIndex];
-                        final selected = q.selectedIndex == optIndex;
-
-                        return Padding(
-                          padding: const EdgeInsets.only(bottom: 12.0),
-                          child: InkWell(
-                            borderRadius: BorderRadius.circular(999),
-                            onTap: () {
-                              setState(() {
-                                q.selectedIndex = optIndex;
-                              });
-                            },
+                    child: q.type == 'writing'
+                        ? SingleChildScrollView(
                             child: Container(
-                              padding: const EdgeInsets.symmetric(
-                                horizontal: 16,
-                                vertical: 10,
-                              ),
+                              padding: const EdgeInsets.all(16),
                               decoration: BoxDecoration(
-                                color: selected
-                                    ? Colors.white
-                                    : Colors.white.withOpacity(0.95),
-                                borderRadius: BorderRadius.circular(999),
-                                border: Border.all(
-                                  color: selected
-                                      ? _primaryColor()
-                                      : Colors.transparent,
-                                  width: 2,
-                                ),
+                                color: Colors.white,
+                                borderRadius: BorderRadius.circular(16),
                                 boxShadow: [
                                   BoxShadow(
                                     color: Colors.black.withOpacity(0.04),
@@ -331,42 +315,86 @@ class _LevelExamScreenState extends State<LevelExamScreen> {
                                   ),
                                 ],
                               ),
-                              child: Row(
-                                children: [
-                                  Container(
-                                    width: 32,
-                                    height: 32,
-                                    decoration: BoxDecoration(
-                                      color: _badgeColor(optIndex),
-                                      shape: BoxShape.circle,
-                                    ),
-                                    alignment: Alignment.center,
-                                    child: Text(
-                                      opt.key.toLowerCase(),
-                                      style: const TextStyle(
-                                        color: Colors.white,
-                                        fontWeight: FontWeight.bold,
-                                      ),
-                                    ),
-                                  ),
-                                  const SizedBox(width: 12),
-                                  Expanded(
-                                    child: Text(
-                                      opt.text,
-                                      style: TextStyle(
-                                        fontSize: 16,
-                                        fontWeight: FontWeight.w500,
-                                        color: Colors.grey.shade900,
-                                      ),
-                                    ),
-                                  ),
-                                ],
+                              child: TextField(
+                                controller: _writingController,
+                                textDirection: TextDirection.rtl,
+                                minLines: 3,
+                                maxLines: 5,
+                                decoration: const InputDecoration(
+                                  labelText: 'Your answer',
+                                  border: OutlineInputBorder(),
+                                  alignLabelWithHint: true,
+                                ),
+                                onChanged: (val) {
+                                  q.writtenAnswer = val;
+                                },
                               ),
                             ),
+                          )
+                        : ListView.builder(
+                            padding: EdgeInsets.zero,
+                            itemCount: q.options.length,
+                            itemBuilder: (context, optIndex) {
+                              final opt = q.options[optIndex];
+                              final selected = q.selectedIndex == optIndex;
+
+                              return Padding(
+                                padding: const EdgeInsets.only(bottom: 12.0),
+                                child: InkWell(
+                                  borderRadius: BorderRadius.circular(999),
+                                  onTap: () => setState(() => q.selectedIndex = optIndex),
+                                  child: Container(
+                                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                                    decoration: BoxDecoration(
+                                      color: Colors.white,
+                                      borderRadius: BorderRadius.circular(999),
+                                      border: Border.all(
+                                        color: selected ? _primaryColor() : Colors.transparent,
+                                        width: 2,
+                                      ),
+                                      boxShadow: [
+                                        BoxShadow(
+                                          color: Colors.black.withOpacity(0.04),
+                                          blurRadius: 8,
+                                          offset: const Offset(0, 3),
+                                        ),
+                                      ],
+                                    ),
+                                    child: Row(
+                                      children: [
+                                        Expanded(
+                                          child: Text(
+                                            opt.text,
+                                            textAlign: TextAlign.center,
+                                            textDirection: TextDirection.rtl,
+                                            style: TextStyle(
+                                              fontSize: 16,
+                                              fontWeight: FontWeight.w500,
+                                              color: Colors.grey.shade900,
+                                            ),
+                                          ),
+                                        ),
+                                        const SizedBox(width: 12),
+                                        Container(
+                                          width: 32,
+                                          height: 32,
+                                          decoration: BoxDecoration(
+                                            color: _badgeColor(optIndex),
+                                            shape: BoxShape.circle,
+                                          ),
+                                          alignment: Alignment.center,
+                                          child: Text(
+                                            opt.key.toLowerCase(),
+                                            style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                ),
+                              );
+                            },
                           ),
-                        );
-                      },
-                    ),
                   ),
 
                   const SizedBox(height: 8),
@@ -378,14 +406,10 @@ class _LevelExamScreenState extends State<LevelExamScreen> {
                           style: OutlinedButton.styleFrom(
                             side: BorderSide(color: Colors.grey.shade400),
                             foregroundColor: Colors.grey.shade800,
-                            padding:
-                                const EdgeInsets.symmetric(vertical: 12),
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(999),
-                            ),
+                            padding: const EdgeInsets.symmetric(vertical: 12),
+                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(999)),
                           ),
-                          onPressed:
-                              _currentIndex == 0 ? null : () => _goPrevious(),
+                          onPressed: _currentIndex == 0 ? null : () => _goPrevious(),
                           child: const Text('Previous'),
                         ),
                       ),
@@ -395,23 +419,15 @@ class _LevelExamScreenState extends State<LevelExamScreen> {
                           style: ElevatedButton.styleFrom(
                             backgroundColor: _primaryColor(),
                             foregroundColor: Colors.white,
-                            padding:
-                                const EdgeInsets.symmetric(vertical: 12),
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(999),
-                            ),
+                            padding: const EdgeInsets.symmetric(vertical: 12),
+                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(999)),
                           ),
-                          onPressed: _submitting
-                              ? null
-                              : () => _goNext(questions),
+                          onPressed: _submitting ? null : () => _goNext(questions),
                           child: _submitting
                               ? const SizedBox(
                                   height: 20,
                                   width: 20,
-                                  child: CircularProgressIndicator(
-                                    strokeWidth: 2,
-                                    color: Colors.white,
-                                  ),
+                                  child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
                                 )
                               : Text(isLast ? 'Submit Test' : 'Next'),
                         ),

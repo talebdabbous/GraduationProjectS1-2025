@@ -1,6 +1,6 @@
 class LevelOption {
-  final String key;   // A, B, C, D
-  final String text;  // النص بالعربي
+  final String key;
+  final String text;
 
   LevelOption({required this.key, required this.text});
 
@@ -15,13 +15,14 @@ class LevelOption {
 class LevelQuestion {
   final String id;
   final String questionTextEN;
-  final String type;
+  final String type; // vocabulary/grammar/reading/listening/writing
   final String skill;
   final String levelTag;
   final List<LevelOption> options;
   final String? mediaUrl;
 
-  int? selectedIndex; // هاي بس للـ UI، مش من الداتا بيس
+  int? selectedIndex;     // للـ MCQ
+  String? writtenAnswer;  // ✅ للـ writing
 
   LevelQuestion({
     required this.id,
@@ -32,16 +33,17 @@ class LevelQuestion {
     required this.options,
     this.mediaUrl,
     this.selectedIndex,
+    this.writtenAnswer,
   });
 
   factory LevelQuestion.fromJson(Map<String, dynamic> json) {
     return LevelQuestion(
       id: json['_id'],
-      questionTextEN: json['questionTextEN'],
-      type: json['type'],
-      skill: json['skill'],
+      questionTextEN: json['questionTextEN'] ?? '',
+      type: json['type'] ?? 'vocabulary',
+      skill: json['skill'] ?? 'vocabulary',
       levelTag: json['levelTag'] ?? 'A1',
-      options: (json['options'] as List)
+      options: ((json['options'] ?? []) as List)
           .map((o) => LevelOption.fromJson(o))
           .toList(),
       mediaUrl: json['mediaUrl'],
