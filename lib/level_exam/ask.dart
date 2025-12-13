@@ -25,7 +25,7 @@ class StartLevelPage extends StatelessWidget {
       try {
         await AuthService.updateMe(
           token: token,
-          level: 'Beginner A1',
+          // level: 'Beginner A1',
           completedLevelExam: true,
         );
       } catch (_) {

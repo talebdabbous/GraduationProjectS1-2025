@@ -85,7 +85,7 @@ class _LevelExamScreenState extends State<LevelExamScreen> {
         try {
           await AuthService.updateMe(
             token: token,
-            level: prettyLevel,
+            // level: prettyLevel,
             completedLevelExam: true,
           );
         } catch (_) {}
