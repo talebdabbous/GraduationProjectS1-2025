@@ -27,16 +27,13 @@ class _RegisterScreenState extends State<RegisterScreen> {
   bool obscure = true;
 
   // New schema fields
-  String _gender = "None"; // Male / Female / None
   String _nativeLanguage = "en"; // ar / en / tr / fr / es / ur / other
-  String? _learningGoal; // optional
 
   // أخطاء الحقول (تنعرض تحت كل حقل)
   String? nameError;
   String? emailError;
   String? passwordError;
   String? dobError;
-  String? genderError;
   String? nativeLanguageError;
 
   @override
@@ -191,6 +188,53 @@ class _RegisterScreenState extends State<RegisterScreen> {
                           ),
                           const SizedBox(height: 14),
 
+                          // Native Language dropdown (required) with flags
+                          DropdownButtonFormField<String>(
+                            value: _nativeLanguage,
+                            decoration: InputDecoration(
+                              labelText: "Native Language *",
+                              errorText: nativeLanguageError,
+                              border: OutlineInputBorder(
+                                borderRadius: BorderRadius.circular(12),
+                              ),
+                            ),
+                            items: [
+                              DropdownMenuItem(
+                                value: "ar",
+                                child: Row(children: const [Text("🇸🇦 Arabic")]),
+                              ),
+                              DropdownMenuItem(
+                                value: "en",
+                                child: Row(children: const [Text("🇬🇧 English")]),
+                              ),
+                              DropdownMenuItem(
+                                value: "tr",
+                                child: Row(children: const [Text("🇹🇷 Turkish")]),
+                              ),
+                              DropdownMenuItem(
+                                value: "fr",
+                                child: Row(children: const [Text("🇫🇷 French")]),
+                              ),
+                              DropdownMenuItem(
+                                value: "es",
+                                child: Row(children: const [Text("🇪🇸 Spanish")]),
+                              ),
+                              DropdownMenuItem(
+                                value: "ur",
+                                child: Row(children: const [Text("🇵🇰 Urdu")]),
+                              ),
+                              DropdownMenuItem(
+                                value: "other",
+                                child: Row(children: const [Text("❓ Other")]),
+                              ),
+                            ],
+                            onChanged: (val) => setState(() {
+                              _nativeLanguage = val ?? "en";
+                              nativeLanguageError = null;
+                            }),
+                          ),
+                          const SizedBox(height: 14),
+
                           // Password
                           TextField(
                             controller: password,
@@ -216,78 +260,6 @@ class _RegisterScreenState extends State<RegisterScreen> {
                             onChanged: (_) =>
                                 setState(() => passwordError = null),
                             textInputAction: TextInputAction.done,
-                          ),
-                          const SizedBox(height: 14),
-
-                          // Gender dropdown
-                          DropdownButtonFormField<String>(
-                            value: _gender,
-                            decoration: InputDecoration(
-                              labelText: "Gender",
-                              errorText: genderError,
-                              border: OutlineInputBorder(
-                                borderRadius: BorderRadius.circular(12),
-                              ),
-                            ),
-                            items: const [
-                              DropdownMenuItem(value: "None", child: Text("None")),
-                              DropdownMenuItem(value: "Male", child: Text("Male")),
-                              DropdownMenuItem(value: "Female", child: Text("Female")),
-                            ],
-                            onChanged: (val) => setState(() {
-                              _gender = val ?? "None";
-                              genderError = null;
-                            }),
-                          ),
-                          const SizedBox(height: 14),
-
-                          // Native Language dropdown (required)
-                          DropdownButtonFormField<String>(
-                            value: _nativeLanguage,
-                            decoration: InputDecoration(
-                              labelText: "Native Language *",
-                              errorText: nativeLanguageError,
-                              border: OutlineInputBorder(
-                                borderRadius: BorderRadius.circular(12),
-                              ),
-                            ),
-                            items: const [
-                              DropdownMenuItem(value: "ar", child: Text("Arabic")),
-                              DropdownMenuItem(value: "en", child: Text("English")),
-                              DropdownMenuItem(value: "tr", child: Text("Turkish")),
-                              DropdownMenuItem(value: "fr", child: Text("French")),
-                              DropdownMenuItem(value: "es", child: Text("Spanish")),
-                              DropdownMenuItem(value: "ur", child: Text("Urdu")),
-                              DropdownMenuItem(value: "other", child: Text("Other")),
-                            ],
-                            onChanged: (val) => setState(() {
-                              _nativeLanguage = val ?? "en";
-                              nativeLanguageError = null;
-                            }),
-                          ),
-                          const SizedBox(height: 14),
-
-                          // Learning Goal dropdown (optional)
-                          DropdownButtonFormField<String?>(
-                            value: _learningGoal,
-                            decoration: InputDecoration(
-                              labelText: "Learning Goal (optional)",
-                              border: OutlineInputBorder(
-                                borderRadius: BorderRadius.circular(12),
-                              ),
-                            ),
-                            items: const [
-                              DropdownMenuItem(value: null, child: Text("None")),
-                              DropdownMenuItem(value: "travel", child: Text("Travel")),
-                              DropdownMenuItem(value: "study", child: Text("Study")),
-                              DropdownMenuItem(value: "work", child: Text("Work")),
-                              DropdownMenuItem(value: "conversation", child: Text("Conversation")),
-                              DropdownMenuItem(value: "religion", child: Text("Religion")),
-                              DropdownMenuItem(value: "culture", child: Text("Culture")),
-                              DropdownMenuItem(value: "exam", child: Text("Exam")),
-                              DropdownMenuItem(value: "other", child: Text("Other")),
-                            ],
-                            onChanged: (val) => setState(() => _learningGoal = val),
                           ),
                           const SizedBox(height: 20),
 
@@ -508,7 +480,6 @@ class _RegisterScreenState extends State<RegisterScreen> {
       emailError = null;
       passwordError = null;
       dobError = null;
-      genderError = null;
       nativeLanguageError = null;
     });
 
@@ -565,9 +536,8 @@ class _RegisterScreenState extends State<RegisterScreen> {
       email: emailVal,
       password: pwd,
       dateOfBirth: dobText.text.trim(),
-      gender: _gender,
+      gender: "None",
       nativeLanguage: _nativeLanguage,
-      learningGoal: _learningGoal,
     );
 
     setState(() => isLoading = false);
