@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:audioplayers/audioplayers.dart';
+import 'package:flutter_tts/flutter_tts.dart';
+import 'package:google_fonts/google_fonts.dart';
 
 import 'level_question.dart';
 import '../services/level_exam_service.dart';
@@ -20,6 +22,8 @@ class _LevelExamScreenState extends State<LevelExamScreen> {
 
   final AudioPlayer _audioPlayer = AudioPlayer();
   final TextEditingController _writingController = TextEditingController();
+  final FlutterTts _flutterTts = FlutterTts();
+  bool _isTtsSpeaking = false;
 
   @override
   void initState() {
@@ -35,6 +39,9 @@ class _LevelExamScreenState extends State<LevelExamScreen> {
     
     // ضبط التوازن (0.0 = وسط)
     _audioPlayer.setBalance(0.0);
+    
+    // ضبط مستوى الصوت في النظام أيضاً
+    _audioPlayer.setPlayerMode(PlayerMode.mediaPlayer);
     
     // استمع لحالة التشغيل
     _audioPlayer.onPlayerStateChanged.listen((state) {
@@ -65,8 +72,114 @@ class _LevelExamScreenState extends State<LevelExamScreen> {
   void dispose() {
     _audioPlayer.stop();
     _audioPlayer.dispose();
+    _flutterTts.stop();
     _writingController.dispose();
     super.dispose();
+  }
+  
+  Future<void> _initTts() async {
+    // محاولة استخدام محرك TTS أفضل (Google على Android)
+    try {
+      // الحصول على قائمة المحركات المتاحة
+      final engines = await _flutterTts.getEngines;
+      print('🔊 Available TTS engines: $engines');
+      
+      // البحث عن محرك Google (الأفضل للعربية)
+      if (engines != null && engines.isNotEmpty) {
+        final googleEngine = engines.firstWhere(
+          (engine) => engine['name']?.toString().toLowerCase().contains('google') ?? false,
+          orElse: () => engines.first,
+        );
+        if (googleEngine['name'] != null) {
+          await _flutterTts.setEngine(googleEngine['name']);
+          print('✅ Using TTS engine: ${googleEngine['name']}');
+        }
+      }
+    } catch (e) {
+      print('⚠️ Could not set TTS engine: $e');
+    }
+    
+    // الإعدادات الافتراضية
+    await _flutterTts.setLanguage("ar-SA"); // اللغة العربية السعودية (أفضل جودة)
+    await _flutterTts.setSpeechRate(0.45); // سرعة أبطأ قليلاً لجودة أفضل
+    await _flutterTts.setVolume(1.0); // مستوى الصوت كامل
+    await _flutterTts.setPitch(1.0); // نبرة الصوت عادية
+    
+    _flutterTts.setCompletionHandler(() {
+      setState(() => _isTtsSpeaking = false);
+    });
+    
+    _flutterTts.setErrorHandler((msg) {
+      print('❌ TTS Error: $msg');
+      setState(() => _isTtsSpeaking = false);
+    });
+  }
+  
+  // تحديد اللغة تلقائياً بناءً على النص
+  String _detectLanguage(String text) {
+    // تحقق إذا كان النص يحتوي على أحرف عربية
+    final arabicPattern = RegExp(r'[\u0600-\u06FF]');
+    if (arabicPattern.hasMatch(text)) {
+      return 'ar-SA'; // عربي - السعودية (أفضل جودة ووضوح)
+    } else {
+      return 'en-US'; // إنجليزي - أمريكا (US أفضل جودة)
+    }
+  }
+  
+  Future<void> _speakText(String text, {String? language}) async {
+    try {
+      if (_isTtsSpeaking) {
+        await _flutterTts.stop();
+      }
+      
+      setState(() => _isTtsSpeaking = true);
+      
+      // تحديد اللغة تلقائياً إذا لم يتم تحديدها
+      final langToUse = language ?? _detectLanguage(text);
+      await _flutterTts.setLanguage(langToUse);
+      
+      // تحسين الإعدادات حسب اللغة
+      if (langToUse.startsWith('en')) {
+        // إعدادات أفضل للإنجليزية
+        await _flutterTts.setSpeechRate(0.5); // سرعة متوسطة
+        await _flutterTts.setVolume(1.0);
+        await _flutterTts.setPitch(1.0);
+      } else if (langToUse.startsWith('ar')) {
+        // إعدادات محسنة للعربية
+        await _flutterTts.setSpeechRate(0.45); // سرعة أبطأ قليلاً للوضوح
+        await _flutterTts.setVolume(1.0); // صوت عالي
+        await _flutterTts.setPitch(1.0); // نبرة طبيعية
+        // استخدام اللغة العربية السعودية (أفضل جودة)
+        if (langToUse != 'ar-SA') {
+          await _flutterTts.setLanguage('ar-SA');
+        }
+      } else {
+        // إعدادات افتراضية للغات الأخرى
+        await _flutterTts.setSpeechRate(0.5);
+        await _flutterTts.setVolume(1.0);
+        await _flutterTts.setPitch(1.0);
+      }
+      
+      await _flutterTts.speak(text);
+      print('🗣️ Speaking: $text (Language: $langToUse)');
+    } catch (e) {
+      print('❌ TTS Error: $e');
+      setState(() => _isTtsSpeaking = false);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Could not speak text: $e')),
+        );
+      }
+    }
+  }
+  
+  Future<void> _stopTts() async {
+    try {
+      await _flutterTts.stop();
+      setState(() => _isTtsSpeaking = false);
+    } catch (e) {
+      print('❌ TTS Stop Error: $e');
+    }
   }
 
   Future<void> _stopAudio() async {
@@ -100,12 +213,16 @@ class _LevelExamScreenState extends State<LevelExamScreen> {
         return;
       }
       
-      // تأكد من مستوى الصوت (1.0 = 100%)
+      // تأكد من مستوى الصوت (1.0 = 100%) - أقصى حد
       await _audioPlayer.setVolume(1.0);
-      print('🔊 Volume set to 1.0 (100%)');
+      print('🔊 Volume set to 1.0 (100%) - Maximum volume');
       
       // ضبط التوازن
       await _audioPlayer.setBalance(0.0);
+      
+      // محاولة رفع مستوى الصوت مرة أخرى قبل التشغيل
+      await Future.delayed(const Duration(milliseconds: 50));
+      await _audioPlayer.setVolume(1.0);
       
       // أظهر رسالة للمستخدم
       if (mounted) {
@@ -121,10 +238,20 @@ class _LevelExamScreenState extends State<LevelExamScreen> {
       await _audioPlayer.play(UrlSource(url));
       print('✅ Play command sent successfully');
       
-      // تأكد من مستوى الصوت مرة أخرى بعد بدء التشغيل
+      // تأكد من مستوى الصوت عدة مرات بعد بدء التشغيل
       Future.delayed(const Duration(milliseconds: 100), () async {
         await _audioPlayer.setVolume(1.0);
-        print('🔊 Volume confirmed at 1.0 after playback start');
+        print('🔊 Volume set to 1.0 after 100ms');
+      });
+      
+      Future.delayed(const Duration(milliseconds: 300), () async {
+        await _audioPlayer.setVolume(1.0);
+        print('🔊 Volume confirmed at 1.0 after 300ms');
+      });
+      
+      Future.delayed(const Duration(milliseconds: 500), () async {
+        await _audioPlayer.setVolume(1.0);
+        print('🔊 Volume confirmed at 1.0 after 500ms');
       });
       
       // انتظر قليلاً ثم تحقق من الحالة
@@ -265,20 +392,31 @@ class _LevelExamScreenState extends State<LevelExamScreen> {
     setState(() => _currentIndex -= 1);
   }
 
-  Color _backgroundColor() => const Color(0xFFE6F4FF);
-  Color _primaryColor() => const Color(0xFF0EA5E9);
+  // ألوان من الصورة: أصفر فاتح للخلفية، teal للنهر والعناصر الأساسية
+  Color _backgroundColor() => const Color(0xFFF5F1E8); // بيج فاتح
+  Color _primaryColor() => const Color(0xFF14B8A6); // Teal/Blue-Green (من النهر في الصورة)
 
   Color _badgeColor(int index) {
-    switch (index) {
-      case 0:
-        return const Color(0xFFFACC15);
-      case 1:
-        return const Color(0xFF38BDF8);
-      case 2:
-        return const Color(0xFFA855F7);
-      case 3:
+    // كل الرموز بنفس اللون (لون ج الأصلي)
+    return const Color(0xFF0D9488); // Teal غامق
+  }
+  
+  // لون التركواز من الجبال والمخطط - للعناصر التفاعلية مثل Next
+  Color _turquoiseColor() => const Color(0xFF06B6D4);
+  
+  // تحويل A, B, C, D إلى أ, ب, ج, د
+  String _convertKeyToArabic(String key) {
+    switch (key.toUpperCase()) {
+      case 'A':
+        return 'أ';
+      case 'B':
+        return 'ب';
+      case 'C':
+        return 'ج';
+      case 'D':
+        return 'د';
       default:
-        return const Color(0xFF34D399);
+        return key;
     }
   }
 
@@ -314,6 +452,17 @@ class _LevelExamScreenState extends State<LevelExamScreen> {
             
             // طباعة معلومات السؤال للتشخيص
             print('📝 Question ${_currentIndex + 1}: type=${q.type}, text="${q.questionTextEN}", isEmpty=${(q.questionTextEN ?? '').isEmpty}');
+            print('🖼️ Image URL: ${q.imageUrl ?? "null"}');
+            if (_currentIndex == 1) {
+              print('📸 Question 2 detected - checking image...');
+              if ((q.imageUrl ?? '').isEmpty) {
+                print('❌ imageUrl is empty in database');
+              } else if (!q.imageUrl!.startsWith('http')) {
+                print('❌ imageUrl does not start with http: ${q.imageUrl}');
+              } else {
+                print('✅ imageUrl is valid: ${q.imageUrl}');
+              }
+            }
             if (q.type == 'writing') {
               print('✍️ Writing question detected - will show TextField');
             } else {
@@ -336,8 +485,9 @@ class _LevelExamScreenState extends State<LevelExamScreen> {
             return Padding(
               padding: const EdgeInsets.symmetric(horizontal: 16.0),
               child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  const SizedBox(height: 8),
+                  const SizedBox(height: 20),
 
                   Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -367,11 +517,11 @@ class _LevelExamScreenState extends State<LevelExamScreen> {
 
                   const SizedBox(height: 16),
 
-                  // صندوق السؤال الكبير + listening button + image
+                  // صندوق السؤال
                   Container(
                     width: double.infinity,
-                    padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 20),
-                    constraints: const BoxConstraints(minHeight: 190),
+                    padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 32),
+                    constraints: const BoxConstraints(minHeight: 180),
                     decoration: BoxDecoration(
                       color: Colors.white,
                       borderRadius: BorderRadius.circular(24),
@@ -385,23 +535,73 @@ class _LevelExamScreenState extends State<LevelExamScreen> {
                     ),
                     child: Column(
                       mainAxisAlignment: MainAxisAlignment.center,
+                      crossAxisAlignment: CrossAxisAlignment.center,
                       children: [
+                        // السؤال
+                        Builder(
+                          builder: (context) {
+                            final text = (q.questionTextEN ?? '').isNotEmpty 
+                                ? q.questionTextEN 
+                                : (q.type == 'writing' 
+                                    ? 'Write your answer:' 
+                                    : 'Question ${_currentIndex + 1}');
+                            final arabicPattern = RegExp(r'[\u0600-\u06FF]');
+                            final isArabic = arabicPattern.hasMatch(text);
+                            
+                            return Text(
+                              text,
+                              textAlign: TextAlign.center,
+                              textDirection: isArabic ? TextDirection.rtl : TextDirection.ltr,
+                              style: isArabic
+                                  ? GoogleFonts.tajawal(
+                                      fontSize: 20,
+                                      height: 1.5,
+                                      fontWeight: FontWeight.w600,
+                                      color: Colors.grey.shade900,
+                                    )
+                                  : const TextStyle(
+                                      fontSize: 18,
+                                      height: 1.4,
+                                      fontWeight: FontWeight.w600,
+                                    ),
+                            );
+                          },
+                        ),
+                        const SizedBox(height: 8),
+                        // زر TTS
+                        IconButton(
+                          icon: Icon(
+                            _isTtsSpeaking ? Icons.volume_up : Icons.volume_up_outlined,
+                            color: _isTtsSpeaking ? _primaryColor() : Colors.grey,
+                          ),
+                          onPressed: () {
+                            final textToSpeak = (q.questionTextEN ?? '').isNotEmpty 
+                                ? q.questionTextEN 
+                                : (q.type == 'writing' 
+                                    ? 'Write your answer' 
+                                    : 'Question ${_currentIndex + 1}');
+                            if (_isTtsSpeaking) {
+                              _stopTts();
+                            } else {
+                              _speakText(textToSpeak);
+                            }
+                          },
+                          tooltip: 'Listen to question',
+                        ),
+                        // زر الاستماع للأسئلة السمعية
                         if (q.type == 'listening' && ((q.audioUrl ?? '').isNotEmpty || (q.mediaUrl ?? '').isNotEmpty))
                           Column(
                             children: [
+                              const SizedBox(height: 8),
                               IconButton(
                                 iconSize: 32,
                                 onPressed: () {
-                                  // ✅ استخدم audioUrl أولاً (الصوت الجديد من قاعدة البيانات)
-                                  // إذا لم يكن موجوداً أو كان رابط غير صحيح، استخدم mediaUrl القديم
                                   String? audioToPlay;
                                   if ((q.audioUrl ?? '').isNotEmpty && 
                                       q.audioUrl!.startsWith('http') && 
                                       !q.audioUrl!.contains('...')) {
-                                    // audioUrl موجود وصحيح
                                     audioToPlay = q.audioUrl!;
                                   } else if ((q.mediaUrl ?? '').isNotEmpty) {
-                                    // استخدم mediaUrl
                                     audioToPlay = q.mediaUrl!;
                                   }
                                   
@@ -419,112 +619,132 @@ class _LevelExamScreenState extends State<LevelExamScreen> {
                                 color: _primaryColor(),
                               ),
                               const Text('Tap to listen', style: TextStyle(fontSize: 14, color: Colors.grey)),
-                              const SizedBox(height: 12),
                             ],
                           ),
-                        // ✅ عرض الصورة فقط في السؤال الثاني (index 1)
-                        if (_currentIndex == 1 && (q.imageUrl ?? '').isNotEmpty && q.imageUrl!.startsWith('http'))
-                          Column(
-                            children: [
-                              ClipRRect(
-                                borderRadius: BorderRadius.circular(16),
-                                child: Image.network(
-                                  q.imageUrl!,
-                                  width: double.infinity,
-                                  height: 200,
-                                  fit: BoxFit.cover,
-                                  errorBuilder: (context, error, stackTrace) {
-                                    return Container(
-                                      height: 200,
-                                      color: Colors.grey.shade200,
-                                      child: const Icon(Icons.image_not_supported, size: 50, color: Colors.grey),
-                                    );
-                                  },
-                                  loadingBuilder: (context, child, loadingProgress) {
-                                    if (loadingProgress == null) return child;
-                                    return Container(
-                                      height: 200,
-                                      color: Colors.grey.shade100,
-                                      child: Center(
-                                        child: CircularProgressIndicator(
-                                          value: loadingProgress.expectedTotalBytes != null
-                                              ? loadingProgress.cumulativeBytesLoaded / loadingProgress.expectedTotalBytes!
-                                              : null,
-                                        ),
+                        // الصورة للسؤال الثاني
+                        if (_currentIndex == 1)
+                          Builder(
+                            builder: (context) {
+                              String? imageToShow;
+                              if ((q.imageUrl ?? '').isNotEmpty && q.imageUrl!.startsWith('http')) {
+                                imageToShow = q.imageUrl;
+                              } else if ((q.mediaUrl ?? '').isNotEmpty && q.mediaUrl!.startsWith('http') && q.type != 'listening') {
+                                imageToShow = q.mediaUrl;
+                              }
+                              
+                              print('🖼️ Question 2 - imageUrl: ${q.imageUrl}, mediaUrl: ${q.mediaUrl}, finalImage: $imageToShow');
+                              
+                              if (imageToShow != null) {
+                                return Column(
+                                  children: [
+                                    const SizedBox(height: 16),
+                                    ClipRRect(
+                                      borderRadius: BorderRadius.circular(12),
+                                      child: Image.network(
+                                        imageToShow,
+                                        width: double.infinity,
+                                        height: 200,
+                                        fit: BoxFit.cover,
+                                        errorBuilder: (context, error, stackTrace) {
+                                          print('❌ Image load error: $error');
+                                              return Container(
+                                                height: 200,
+                                                color: Colors.grey.shade200,
+                                            child: Column(
+                                              mainAxisAlignment: MainAxisAlignment.center,
+                                              children: [
+                                                const Icon(Icons.image_not_supported, size: 40, color: Colors.grey),
+                                                const SizedBox(height: 4),
+                                                Text('Failed to load image', style: TextStyle(color: Colors.grey.shade600, fontSize: 12)),
+                                              ],
+                                            ),
+                                          );
+                                        },
+                                        loadingBuilder: (context, child, loadingProgress) {
+                                          if (loadingProgress == null) {
+                                            print('✅ Image loaded successfully');
+                                            return child;
+                                          }
+                                              return Container(
+                                                height: 200,
+                                                color: Colors.grey.shade100,
+                                            child: Center(
+                                              child: CircularProgressIndicator(
+                                                value: loadingProgress.expectedTotalBytes != null
+                                                    ? loadingProgress.cumulativeBytesLoaded / loadingProgress.expectedTotalBytes!
+                                                    : null,
+                                              ),
+                                            ),
+                                          );
+                                        },
                                       ),
-                                    );
-                                  },
-                                ),
-                              ),
-                              const SizedBox(height: 16),
-                            ],
+                                    ),
+                                  ],
+                                );
+                              } else {
+                                print('⚠️ Question 2 has no valid image (imageUrl or mediaUrl)');
+                                return const SizedBox.shrink();
+                              }
+                            },
                           ),
-                        Text(
-                          (q.questionTextEN ?? '').isNotEmpty 
-                              ? q.questionTextEN 
-                              : (q.type == 'writing' 
-                                  ? 'Write your answer:' 
-                                  : 'Question ${_currentIndex + 1}'),
-                          textAlign: TextAlign.center,
-                          textDirection: TextDirection.rtl,
-                          style: const TextStyle(fontSize: 20, height: 1.5, fontWeight: FontWeight.w700),
-                        ),
                       ],
                     ),
                   ),
 
-                  const SizedBox(height: 30),
+                  const SizedBox(height: 16),
 
-                  // ✅ MCQ or Writing
+                  // الأجوبة (بدون بوكس كبير)
                   Expanded(
                     child: q.type == 'writing'
-                        ? SingleChildScrollView(
-                            child: Container(
-                              padding: const EdgeInsets.all(16),
-                              decoration: BoxDecoration(
-                                color: Colors.white,
-                                borderRadius: BorderRadius.circular(16),
-                                boxShadow: [
-                                  BoxShadow(
-                                    color: Colors.black.withOpacity(0.04),
-                                    blurRadius: 8,
-                                    offset: const Offset(0, 3),
-                                  ),
-                                ],
-                              ),
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Text(
-                                    'Write your answer:',
-                                    style: TextStyle(
-                                      fontSize: 16,
-                                      fontWeight: FontWeight.w600,
-                                      color: Colors.grey.shade700,
+                        ? Center(
+                            child: SingleChildScrollView(
+                              child: Container(
+                                padding: const EdgeInsets.all(16),
+                                decoration: BoxDecoration(
+                                  color: Colors.white,
+                                  borderRadius: BorderRadius.circular(16),
+                                  boxShadow: [
+                                    BoxShadow(
+                                      color: Colors.black.withOpacity(0.04),
+                                      blurRadius: 8,
+                                      offset: const Offset(0, 3),
                                     ),
-                                    textDirection: TextDirection.rtl,
-                                  ),
-                                  const SizedBox(height: 12),
-                                  TextField(
-                                    controller: _writingController,
-                                    textDirection: TextDirection.rtl,
-                                    minLines: 5,
-                                    maxLines: 8,
-                                    decoration: const InputDecoration(
-                                      hintText: 'Type your answer here...',
-                                      border: OutlineInputBorder(),
-                                      alignLabelWithHint: true,
+                                  ],
+                                ),
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text(
+                                      'Write your answer:',
+                                      textDirection: TextDirection.rtl,
+                                      style: TextStyle(
+                                        fontSize: 16,
+                                        fontWeight: FontWeight.w600,
+                                        color: Colors.grey.shade700,
+                                      ),
                                     ),
-                                    onChanged: (val) {
-                                      q.writtenAnswer = val;
-                                    },
-                                  ),
-                                ],
+                                    const SizedBox(height: 12),
+                                    TextField(
+                                      controller: _writingController,
+                                      textDirection: TextDirection.rtl,
+                                      minLines: 5,
+                                      maxLines: 8,
+                                      decoration: const InputDecoration(
+                                        hintText: 'Type your answer here...',
+                                        border: OutlineInputBorder(),
+                                        alignLabelWithHint: true,
+                                      ),
+                                      onChanged: (val) {
+                                        q.writtenAnswer = val;
+                                      },
+                                    ),
+                                  ],
+                                ),
                               ),
                             ),
                           )
                         : ListView.builder(
-                            padding: EdgeInsets.zero,
+                            padding: const EdgeInsets.symmetric(horizontal: 16),
                             itemCount: q.options.length,
                             itemBuilder: (context, optIndex) {
                               final opt = q.options[optIndex];
@@ -554,30 +774,54 @@ class _LevelExamScreenState extends State<LevelExamScreen> {
                                     ),
                                     child: Row(
                                       children: [
+                                        IconButton(
+                                          icon: const Icon(Icons.volume_up, size: 20),
+                                          color: Colors.grey.shade600,
+                                          padding: EdgeInsets.zero,
+                                          constraints: const BoxConstraints(),
+                                          onPressed: () {
+                                            _speakText(opt.text);
+                                          },
+                                          tooltip: 'Listen to option',
+                                        ),
+                                        const SizedBox(width: 8),
                                         Expanded(
-                                          child: Text(
-                                            opt.text,
-                                            textAlign: TextAlign.center,
-                                            textDirection: TextDirection.rtl,
-                                            style: TextStyle(
-                                              fontSize: 16,
-                                              fontWeight: FontWeight.w500,
-                                              color: Colors.grey.shade900,
-                                            ),
+                                          child: Builder(
+                                            builder: (context) {
+                                              final arabicPattern = RegExp(r'[\u0600-\u06FF]');
+                                              final isArabic = arabicPattern.hasMatch(opt.text);
+                                              
+                                              return Text(
+                                                opt.text,
+                                                textAlign: TextAlign.center,
+                                                textDirection: isArabic ? TextDirection.rtl : TextDirection.ltr,
+                                                style: isArabic
+                                                    ? GoogleFonts.tajawal(
+                                                        fontSize: 17,
+                                                        fontWeight: FontWeight.w500,
+                                                        color: Colors.grey.shade900,
+                                                      )
+                                                    : TextStyle(
+                                                        fontSize: 15,
+                                                        fontWeight: FontWeight.w500,
+                                                        color: Colors.grey.shade900,
+                                                      ),
+                                              );
+                                            },
                                           ),
                                         ),
-                                        const SizedBox(width: 12),
+                                        const SizedBox(width: 8),
                                         Container(
-                                          width: 32,
-                                          height: 32,
+                                          width: 28,
+                                          height: 28,
                                           decoration: BoxDecoration(
                                             color: _badgeColor(optIndex),
                                             shape: BoxShape.circle,
                                           ),
                                           alignment: Alignment.center,
                                           child: Text(
-                                            opt.key.toLowerCase(),
-                                            style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
+                                            _convertKeyToArabic(opt.key),
+                                            style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 14),
                                           ),
                                         ),
                                       ],
@@ -589,7 +833,7 @@ class _LevelExamScreenState extends State<LevelExamScreen> {
                           ),
                   ),
 
-                  const SizedBox(height: 8),
+                  const SizedBox(height: 20),
 
                   Row(
                     children: [
@@ -609,7 +853,7 @@ class _LevelExamScreenState extends State<LevelExamScreen> {
                       Expanded(
                         child: ElevatedButton(
                           style: ElevatedButton.styleFrom(
-                            backgroundColor: _primaryColor(),
+                            backgroundColor: const Color(0xFF0D9488), // نفس لون الرموز (Teal غامق)
                             foregroundColor: Colors.white,
                             padding: const EdgeInsets.symmetric(vertical: 12),
                             shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(999)),
@@ -627,7 +871,7 @@ class _LevelExamScreenState extends State<LevelExamScreen> {
                     ],
                   ),
 
-                  const SizedBox(height: 12),
+                  const SizedBox(height: 20),
                 ],
               ),
             );
