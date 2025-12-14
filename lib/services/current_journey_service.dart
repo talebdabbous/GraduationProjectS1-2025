@@ -92,13 +92,23 @@ class CurrentJourneyResponse {
 class CurrentJourneyService {
   static const String baseUrl = "http://10.0.2.2:4000";
 
-  // ✅ backend routes (حسب كودك)
+  // ✅ backend routes
   static const String endpointCurrent = "/api/journey/current";
   static const String endpointByLevel = "/api/journey/by-level";
+
+  // ✅ NEW: complete stage
+  static const String endpointCompleteStage = "/api/journey/complete-stage";
 
   static Future<String?> _token() async {
     final prefs = await SharedPreferences.getInstance();
     return prefs.getString('token');
+  }
+
+  static Map<String, String> _headers(String? token) {
+    return {
+      "Content-Type": "application/json",
+      if (token != null && token.isNotEmpty) "Authorization": "Bearer $token",
+    };
   }
 
   /// ✅ أول ما تفتح الصفحة: يرجع currentLevel + بيانات المستوى الحالي
@@ -106,13 +116,7 @@ class CurrentJourneyService {
     final token = await _token();
     final uri = Uri.parse("$baseUrl$endpointCurrent");
 
-    final res = await http.get(
-      uri,
-      headers: {
-        "Content-Type": "application/json",
-        if (token != null && token.isNotEmpty) "Authorization": "Bearer $token",
-      },
-    );
+    final res = await http.get(uri, headers: _headers(token));
 
     if (res.statusCode < 200 || res.statusCode >= 300) {
       throw Exception("API error ${res.statusCode}: ${res.body}");
@@ -127,13 +131,7 @@ class CurrentJourneyService {
     final token = await _token();
     final uri = Uri.parse("$baseUrl$endpointByLevel?level=${level.apiValue}");
 
-    final res = await http.get(
-      uri,
-      headers: {
-        "Content-Type": "application/json",
-        if (token != null && token.isNotEmpty) "Authorization": "Bearer $token",
-      },
-    );
+    final res = await http.get(uri, headers: _headers(token));
 
     if (res.statusCode < 200 || res.statusCode >= 300) {
       throw Exception("API error ${res.statusCode}: ${res.body}");
@@ -141,5 +139,27 @@ class CurrentJourneyService {
 
     final json = jsonDecode(res.body) as Map<String, dynamic>;
     return JourneyData.fromJson(json);
+  }
+
+  /// ✅ NEW: لما المستخدم يخلص Stage (خصوصًا 15 -> بيرجع level جديد)
+  /// body: { "stage": 1..15 }
+  static Future<CurrentJourneyResponse> completeStage(int stage) async {
+    final token = await _token();
+    final uri = Uri.parse("$baseUrl$endpointCompleteStage");
+
+    final res = await http.post(
+      uri,
+      headers: _headers(token),
+      body: jsonEncode({"stage": stage}),
+    );
+
+    if (res.statusCode < 200 || res.statusCode >= 300) {
+      throw Exception("API error ${res.statusCode}: ${res.body}");
+    }
+
+    final json = jsonDecode(res.body) as Map<String, dynamic>;
+
+    // ✅ الباك بيرجع currentLevel + باقي الحقول
+    return CurrentJourneyResponse.fromJson(json);
   }
 }
