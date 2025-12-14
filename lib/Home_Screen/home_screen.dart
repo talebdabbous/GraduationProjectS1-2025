@@ -1,16 +1,9 @@
 import 'package:flutter/material.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+import '../services/auth_service.dart';
 
 class HomeScreen extends StatefulWidget {
-  final String userName;
-  final int dailyStreak;
-  final int points;
-
-  const HomeScreen({
-    super.key,
-    required this.userName,
-    required this.dailyStreak,
-    required this.points,
-  });
+  const HomeScreen({super.key});
 
   @override
   State<HomeScreen> createState() => _HomeScreenState();
@@ -18,6 +11,56 @@ class HomeScreen extends StatefulWidget {
 
 class _HomeScreenState extends State<HomeScreen> {
   int _index = 0;
+
+  String _userName = '';
+  int _dailyStreak = 0;
+  int _points = 0;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadFromBackend();
+  }
+
+  Future<void> _loadFromBackend() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final token = prefs.getString('token');
+      if (token == null || token.isEmpty) return;
+
+      final res = await AuthService.getMe(token: token);
+      if (res['success'] != true) return;
+
+      final user = res['data'] as Map<String, dynamic>;
+
+      // 🔥 Streak
+      final streak = (user['currentStreak'] ?? 0) as int;
+
+      // ⭐ Points (XP من learningProgress حسب currentMainLevel)
+      int points = 0;
+      final currentMainLevel = user['currentMainLevel'];
+      final progress = user['learningProgress'];
+
+      if (progress is List && currentMainLevel is String) {
+        final item = progress.cast<dynamic>().firstWhere(
+          (e) => e is Map && e['levelId'] == currentMainLevel,
+          orElse: () => null,
+        );
+
+        if (item is Map && item['xp'] != null) {
+          points = (item['xp'] as num).toInt();
+        }
+      }
+
+      setState(() {
+        _userName = user['name'] ?? '';
+        _dailyStreak = streak;
+        _points = points;
+      });
+    } catch (_) {
+      // تجاهل الأخطاء حالياً
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -48,7 +91,6 @@ class _HomeScreenState extends State<HomeScreen> {
                 ),
                 child: Row(
                   children: [
-                    // Left side
                     Expanded(
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
@@ -61,7 +103,7 @@ class _HomeScreenState extends State<HomeScreen> {
                             ),
                           ),
                           Text(
-                            widget.userName,
+                            _userName,
                             style: const TextStyle(
                               fontSize: 22,
                               fontWeight: FontWeight.bold,
@@ -71,9 +113,9 @@ class _HomeScreenState extends State<HomeScreen> {
                           const SizedBox(height: 10),
                           Row(
                             children: [
-                              _stat("🔥 Streak", "${widget.dailyStreak} days"),
+                              _stat("🔥 Streak", "${_dailyStreak} days"),
                               const SizedBox(width: 8),
-                              _stat("⭐ Points", "${widget.points}"),
+                              _stat("⭐ Points", "$_points"),
                             ],
                           )
                         ],
@@ -90,13 +132,12 @@ class _HomeScreenState extends State<HomeScreen> {
               ),
             ),
 
-            // ---------------- GRID FULL HEIGHT ----------------
+            // ---------------- GRID ----------------
             Expanded(
               child: Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 16),
                 child: Column(
                   children: [
-                    // ----------- ROW 1 -----------
                     Expanded(
                       child: Row(
                         children: [
@@ -123,7 +164,6 @@ class _HomeScreenState extends State<HomeScreen> {
 
                     const SizedBox(height: 12),
 
-                    // ----------- ROW 2 -----------
                     Expanded(
                       child: Row(
                         children: [
@@ -162,19 +202,12 @@ class _HomeScreenState extends State<HomeScreen> {
         unselectedItemColor: Colors.grey,
         type: BottomNavigationBarType.fixed,
         onTap: (i) {
-          // لو كبسنا على Profile: افتح شاشة البروفايل وخلي الهوم يضل محدد
           if (i == 3) {
-            setState(() => _index = 0); // تأكد إن الهوم هو المختار لما نرجع
+            setState(() => _index = 0);
             Navigator.pushNamed(context, '/profile_main_screen');
             return;
           }
-
-          // الباقي (Home, Community, Chatbot) بس بغير الإندكس حالياً
           setState(() => _index = i);
-
-          // لاحقاً:
-          // if (i == 1) Navigator.pushNamed(context, '/community');
-          // if (i == 2) Navigator.pushNamed(context, '/chatbot');
         },
         items: const [
           BottomNavigationBarItem(icon: Icon(Icons.home_outlined), label: "Home"),
@@ -186,7 +219,7 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
-  // ================= HELPER WIDGETS =================
+  // ================= HELPERS =================
 
   Widget _stat(String title, String value) {
     return Container(

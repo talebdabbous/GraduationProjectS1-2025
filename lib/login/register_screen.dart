@@ -17,7 +17,6 @@ class _RegisterScreenState extends State<RegisterScreen> {
   final dobText = TextEditingController();
   DateTime? _dob;
 
-  // FocusNodes عشان نقدر نحط الفوكس على الحقل اللي فيه خطأ
   final nameFocus = FocusNode();
   final emailFocus = FocusNode();
   final passwordFocus = FocusNode();
@@ -26,10 +25,8 @@ class _RegisterScreenState extends State<RegisterScreen> {
   bool isLoading = false;
   bool obscure = true;
 
-  // New schema fields
-  String _nativeLanguage = "en"; // ar / en / tr / fr / es / ur / other
+  String _nativeLanguage = "en";
 
-  // أخطاء الحقول (تنعرض تحت كل حقل)
   String? nameError;
   String? emailError;
   String? passwordError;
@@ -49,45 +46,53 @@ class _RegisterScreenState extends State<RegisterScreen> {
     super.dispose();
   }
 
-  /// ✅ نفس فكرة _handleAuthSuccess في LoginScreen
-  /// نخزن التوكن + بيانات المستخدم في SharedPreferences
-  /// وبعدين نقرر نروح على home أو ask_level حسب completed_level_exam (local)
+  /// ✅ تخزين التوكن + بيانات المستخدم
+  /// ✅ قرار التنقل حسب completedLevelExam من الباك (DB)
   Future<void> _handleAuthSuccess(Map<String, dynamic> data) async {
-    final token = data['token'] as String;
-    final user = data['user'] as Map<String, dynamic>? ?? {};
+    final token = (data['token'] ?? '').toString();
+    final user = (data['user'] as Map<String, dynamic>?) ?? {};
 
     final prefs = await SharedPreferences.getInstance();
     await prefs.setString('token', token);
 
-    await prefs.setString('user_name', (user['name'] ?? '') as String);
-    await prefs.setString('user_email', (user['email'] ?? '') as String);
-    await prefs.setString('user_role', (user['role'] ?? 'student') as String);
-    
+    await prefs.setString('user_name', (user['name'] ?? '').toString());
+    await prefs.setString('user_email', (user['email'] ?? '').toString());
+    await prefs.setString('user_role', (user['role'] ?? 'student').toString());
+
     // New schema fields
-    await prefs.setString('user_gender', (user['gender'] ?? 'None') as String);
-    await prefs.setString('user_nativeLanguage', (user['nativeLanguage'] ?? 'en') as String);
-    
+    await prefs.setString('user_gender', (user['gender'] ?? 'None').toString());
+    await prefs.setString(
+      'user_nativeLanguage',
+      (user['nativeLanguage'] ?? 'en').toString(),
+    );
+
     if (user['learningGoal'] != null) {
-      await prefs.setString('user_learningGoal', (user['learningGoal']) as String);
-    }
-    
-    if (user['currentMainLevel'] != null) {
-      await prefs.setString('user_currentMainLevel', (user['currentMainLevel']) as String);
+      await prefs.setString('user_learningGoal', user['learningGoal'].toString());
     }
 
-    await prefs.setString(
-      'user_dob',
-      (user['dateOfBirth'] ?? '') as String,
-    );
+    if (user['currentMainLevel'] != null) {
+      await prefs.setString(
+        'user_currentMainLevel',
+        user['currentMainLevel'].toString(),
+      );
+    }
+
+    await prefs.setString('user_dob', (user['dateOfBirth'] ?? '').toString());
     await prefs.setString(
       'user_profilePicture',
-      (user['profilePicture'] ?? '') as String,
+      (user['profilePicture'] ?? '').toString(),
     );
+
+    // ✅ أهم سطر: اقرأ من الباك (DB)
+    final completedFromBackend = user['completedLevelExam'] == true;
+
+    // ✅ خزّنها ككاش محلي (مش قرار أساسي)
+    await prefs.setBool('completedLevelExam', completedFromBackend);
 
     if (!mounted) return;
 
-    final completedExam = prefs.getBool('completedLevelExam') ?? false;
-    if (completedExam) {
+    // ✅ التنقل حسب الداتا بيس
+    if (completedFromBackend) {
       Navigator.pushReplacementNamed(context, '/home_screen');
     } else {
       Navigator.pushReplacementNamed(context, '/ask_level');
@@ -131,7 +136,6 @@ class _RegisterScreenState extends State<RegisterScreen> {
                           ),
                           const SizedBox(height: 24),
 
-                          // Full Name
                           TextField(
                             controller: name,
                             focusNode: nameFocus,
@@ -148,7 +152,6 @@ class _RegisterScreenState extends State<RegisterScreen> {
                           ),
                           const SizedBox(height: 14),
 
-                          // Email
                           TextField(
                             controller: email,
                             focusNode: emailFocus,
@@ -166,7 +169,6 @@ class _RegisterScreenState extends State<RegisterScreen> {
                           ),
                           const SizedBox(height: 14),
 
-                          // Date of Birth
                           GestureDetector(
                             onTap: _pickDob,
                             child: AbsorbPointer(
@@ -188,7 +190,6 @@ class _RegisterScreenState extends State<RegisterScreen> {
                           ),
                           const SizedBox(height: 14),
 
-                          // Native Language dropdown (required) with flags
                           DropdownButtonFormField<String>(
                             value: _nativeLanguage,
                             decoration: InputDecoration(
@@ -198,35 +199,14 @@ class _RegisterScreenState extends State<RegisterScreen> {
                                 borderRadius: BorderRadius.circular(12),
                               ),
                             ),
-                            items: [
-                              DropdownMenuItem(
-                                value: "ar",
-                                child: Row(children: const [Text("🇸🇦 Arabic")]),
-                              ),
-                              DropdownMenuItem(
-                                value: "en",
-                                child: Row(children: const [Text("🇬🇧 English")]),
-                              ),
-                              DropdownMenuItem(
-                                value: "tr",
-                                child: Row(children: const [Text("🇹🇷 Turkish")]),
-                              ),
-                              DropdownMenuItem(
-                                value: "fr",
-                                child: Row(children: const [Text("🇫🇷 French")]),
-                              ),
-                              DropdownMenuItem(
-                                value: "es",
-                                child: Row(children: const [Text("🇪🇸 Spanish")]),
-                              ),
-                              DropdownMenuItem(
-                                value: "ur",
-                                child: Row(children: const [Text("🇵🇰 Urdu")]),
-                              ),
-                              DropdownMenuItem(
-                                value: "other",
-                                child: Row(children: const [Text("❓ Other")]),
-                              ),
+                            items: const [
+                              DropdownMenuItem(value: "ar", child: Text("🇸🇦 Arabic")),
+                              DropdownMenuItem(value: "en", child: Text("🇬🇧 English")),
+                              DropdownMenuItem(value: "tr", child: Text("🇹🇷 Turkish")),
+                              DropdownMenuItem(value: "fr", child: Text("🇫🇷 French")),
+                              DropdownMenuItem(value: "es", child: Text("🇪🇸 Spanish")),
+                              DropdownMenuItem(value: "ur", child: Text("🇵🇰 Urdu")),
+                              DropdownMenuItem(value: "other", child: Text("❓ Other")),
                             ],
                             onChanged: (val) => setState(() {
                               _nativeLanguage = val ?? "en";
@@ -235,7 +215,6 @@ class _RegisterScreenState extends State<RegisterScreen> {
                           ),
                           const SizedBox(height: 14),
 
-                          // Password
                           TextField(
                             controller: password,
                             focusNode: passwordFocus,
@@ -244,21 +223,15 @@ class _RegisterScreenState extends State<RegisterScreen> {
                               labelText: "Password",
                               prefixIcon: const Icon(Icons.lock),
                               suffixIcon: IconButton(
-                                onPressed: () =>
-                                    setState(() => obscure = !obscure),
-                                icon: Icon(
-                                  obscure
-                                      ? Icons.visibility
-                                      : Icons.visibility_off,
-                                ),
+                                onPressed: () => setState(() => obscure = !obscure),
+                                icon: Icon(obscure ? Icons.visibility : Icons.visibility_off),
                               ),
                               errorText: passwordError,
                               border: OutlineInputBorder(
                                 borderRadius: BorderRadius.circular(12),
                               ),
                             ),
-                            onChanged: (_) =>
-                                setState(() => passwordError = null),
+                            onChanged: (_) => setState(() => passwordError = null),
                             textInputAction: TextInputAction.done,
                           ),
                           const SizedBox(height: 20),
@@ -268,8 +241,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
                             style: ElevatedButton.styleFrom(
                               backgroundColor: const Color(0xFF22C55E),
                               foregroundColor: Colors.white,
-                              padding:
-                                  const EdgeInsets.symmetric(vertical: 14),
+                              padding: const EdgeInsets.symmetric(vertical: 14),
                               shape: RoundedRectangleBorder(
                                 borderRadius: BorderRadius.circular(12),
                               ),
@@ -283,15 +255,13 @@ class _RegisterScreenState extends State<RegisterScreen> {
                                       color: Colors.white,
                                     ),
                                   )
-                                : const Text("Register",
-                                    style: TextStyle(fontSize: 18)),
+                                : const Text("Register", style: TextStyle(fontSize: 18)),
                           ),
 
                           const SizedBox(height: 12),
                           TextButton(
                             onPressed: () {
-                              Navigator.pushReplacementNamed(
-                                  context, '/welcome');
+                              Navigator.pushReplacementNamed(context, '/welcome');
                             },
                             child: const Text("Back "),
                           ),
@@ -308,12 +278,11 @@ class _RegisterScreenState extends State<RegisterScreen> {
     );
   }
 
-  // =============== Dialog OTP: ادخله "داخل" الكلاس (_RegisterScreenState) ===============
   Future<void> _showOtpDialog(String emailVal) async {
     final codeCtrl = TextEditingController();
     String? codeError;
     bool loading = false;
-    int remaining = 0; // عدّاد لإعادة الإرسال
+    int remaining = 0;
     Timer? t;
 
     await showDialog(
@@ -332,19 +301,19 @@ class _RegisterScreenState extends State<RegisterScreen> {
                 loading = true;
                 codeError = null;
               });
-              final res =
-                  await AuthService.verifyEmail(email: emailVal, code: c);
+
+              final res = await AuthService.verifyEmail(email: emailVal, code: c);
+
               setLocal(() => loading = false);
+
               if (res['success'] == true) {
                 final data = res['data'] as Map<String, dynamic>;
                 t?.cancel();
                 if (Navigator.canPop(ctx)) Navigator.pop(ctx);
                 if (!mounted) return;
-                // ✅ بعد التحقق الناجح: خزن التوكن + بيانات المستخدم وكمّل نفس مسار اللوجين
                 await _handleAuthSuccess(data);
               } else {
-                setLocal(
-                    () => codeError = res['message'] ?? 'Verification failed');
+                setLocal(() => codeError = res['message'] ?? 'Verification failed');
               }
             }
 
@@ -354,9 +323,11 @@ class _RegisterScreenState extends State<RegisterScreen> {
                 loading = true;
                 codeError = null;
               });
-              final res =
-                  await AuthService.resendVerification(email: emailVal);
+
+              final res = await AuthService.resendVerification(email: emailVal);
+
               setLocal(() => loading = false);
+
               if (res['success'] == true) {
                 setLocal(() {
                   codeError = 'A new code has been sent to your email.';
@@ -374,20 +345,17 @@ class _RegisterScreenState extends State<RegisterScreen> {
                   });
                 });
               } else {
-                setLocal(() =>
-                    codeError = res['message'] ?? 'Could not resend code');
+                setLocal(() => codeError = res['message'] ?? 'Could not resend code');
               }
             }
 
             return AlertDialog(
-              shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(16)),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
               title: const Text('Verify your email'),
               content: Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  Text('We sent a 6-digit code to\n$emailVal',
-                      textAlign: TextAlign.center),
+                  Text('We sent a 6-digit code to\n$emailVal', textAlign: TextAlign.center),
                   const SizedBox(height: 12),
                   TextField(
                     controller: codeCtrl,
@@ -397,8 +365,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
                       labelText: 'Verification code',
                       counterText: '',
                       errorText: codeError,
-                      border: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(12)),
+                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
                     ),
                     onChanged: (_) => setLocal(() => codeError = null),
                   ),
@@ -416,8 +383,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
                 ),
                 TextButton(
                   onPressed: loading || remaining > 0 ? null : doResend,
-                  child: Text(
-                      remaining > 0 ? 'Resend (${remaining}s)' : 'Resend'),
+                  child: Text(remaining > 0 ? 'Resend (${remaining}s)' : 'Resend'),
                 ),
                 ElevatedButton(
                   onPressed: loading ? null : doVerify,
@@ -425,8 +391,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
                       ? const SizedBox(
                           height: 20,
                           width: 20,
-                          child: CircularProgressIndicator(
-                              strokeWidth: 2, color: Colors.white),
+                          child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
                         )
                       : const Text('Verify'),
                 ),
@@ -474,7 +439,6 @@ class _RegisterScreenState extends State<RegisterScreen> {
   }
 
   Future<void> _register() async {
-    // صفّر الأخطاء
     setState(() {
       nameError = null;
       emailError = null;
@@ -500,7 +464,6 @@ class _RegisterScreenState extends State<RegisterScreen> {
     }
 
     final pwd = password.text;
-    // لازم يكون أطول من 8 → إذا < 8 خطأ
     if (pwd.length < 8) {
       passwordError = 'Password must be longer than 8 characters';
       if (valid) passwordFocus.requestFocus();
@@ -525,7 +488,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
     }
 
     if (!valid) {
-      setState(() {}); // حدّث UI بالأخطاء
+      setState(() {});
       return;
     }
 
@@ -549,28 +512,20 @@ class _RegisterScreenState extends State<RegisterScreen> {
       if (!mounted) return;
 
       if (pending) {
-        // ✅ مود OTP شغّال → افتح Dialog الكود
         await _showOtpDialog(emailVal);
       } else {
-        // ✅ التحقق مطفي → رجع token + user → كمّل مسار اللوجين
         await _handleAuthSuccess(data);
       }
       return;
     } else {
-      // بدل ما نعمل Dialog، منمسك حالة "الإيميل مستخدم" ونظهرها تحت الحقل
       final msg = (result['message'] ?? '').toString().toLowerCase();
       if (msg.contains('email already registered') || msg.contains('already')) {
-        setState(() {
-          emailError = 'Email is already registered';
-        });
+        setState(() => emailError = 'Email is already registered');
         emailFocus.requestFocus();
         return;
       }
 
-      // أي أخطاء عامة ثانية (سيرفر/شبكة) اعرضها تحت الإيميل
-      setState(() {
-        emailError = result['message']?.toString() ?? 'Registration failed';
-      });
+      setState(() => emailError = result['message']?.toString() ?? 'Registration failed');
       emailFocus.requestFocus();
     }
   }

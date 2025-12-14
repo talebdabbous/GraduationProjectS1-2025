@@ -7,23 +7,7 @@ import '../services/auth_service.dart';
 import '../services/cloudinary_service.dart';
 
 class ProfileScreen extends StatefulWidget {
-  final String name;
-  final String email;
-  final String level;
-
-  final String? dateOfBirth;
-  final String? sex;
-  final int? dailyGoal;
-
-  const ProfileScreen({
-    super.key,
-    required this.name,
-    required this.email,
-    required this.level,
-    this.dateOfBirth,
-    this.sex,
-    this.dailyGoal,
-  });
+  const ProfileScreen({super.key});
 
   @override
   State<ProfileScreen> createState() => _ProfileScreenState();
@@ -32,101 +16,101 @@ class ProfileScreen extends StatefulWidget {
 class _ProfileScreenState extends State<ProfileScreen> {
   int _index = 3;
 
-  File? _profileImageFile;       // صورة محلية (بعد ما يختارها)
-  String? _profileImageUrl;      // رابط الصورة من الباك/المحلي
-
-  late String _name;
-  late String _email;
-  late String _level;
+  // ===== User Data =====
+  String _name = '';
+  String _email = '';
+  String _level = '';
   String? _dateOfBirth;
-  String? _sex;
-  int? _dailyGoal;
+  String? _gender;
+  String? _learningGoal;
 
+  // ===== Profile Image =====
+  File? _profileImageFile;
+  String? _profileImageUrl;
   bool _uploadingPhoto = false;
 
   @override
   void initState() {
     super.initState();
-    _name = widget.name;
-    _email = widget.email;
-    _level = widget.level;
-    _dateOfBirth = widget.dateOfBirth;
-    _sex = widget.sex;
-    _dailyGoal = widget.dailyGoal;
-
+    _loadProfile();
     _loadProfilePictureFromPrefs();
+  }
+
+  // ================= LOAD PROFILE =================
+  Future<void> _loadProfile() async {
+    final prefs = await SharedPreferences.getInstance();
+    final token = prefs.getString('token');
+    if (token == null || token.isEmpty) return;
+
+    final res = await AuthService.getMe(token: token);
+    if (res['success'] != true) return;
+
+    final user = res['data'];
+    if (!mounted) return;
+
+    setState(() {
+      _name = user['name'] ?? '';
+      _email = user['email'] ?? '';
+      _level = user['currentMainLevel'] ?? '';
+      _dateOfBirth = user['dateOfBirth'];
+      _gender = user['gender'];
+      _learningGoal = user['learningGoal'];
+      _profileImageUrl = user['profilePicture'];
+    });
   }
 
   Future<void> _loadProfilePictureFromPrefs() async {
     final prefs = await SharedPreferences.getInstance();
     final url = prefs.getString('user_profilePicture');
     if (!mounted) return;
-    setState(() => _profileImageUrl = (url != null && url.isNotEmpty) ? url : null);
+    if (url != null && url.isNotEmpty) {
+      setState(() => _profileImageUrl = url);
+    }
   }
 
-  // ========================= رفع الصورة + حفظها بالباك =========================
+  // ================= PICK & UPLOAD IMAGE =================
   Future<void> _pickAndUpload(ImageSource source) async {
-    final picked = await ImagePicker().pickImage(source: source, imageQuality: 85);
+    final picked = await ImagePicker().pickImage(
+      source: source,
+      imageQuality: 85,
+    );
     if (picked == null) return;
 
     final file = File(picked.path);
-
-    // اعرضها فورًا محليًا
     setState(() {
       _profileImageFile = file;
       _uploadingPhoto = true;
     });
 
     try {
-      // 1) ارفع على Cloudinary
       final url = await CloudinaryService.uploadImage(file);
-      if (url == null) {
-        if (!mounted) return;
-        setState(() => _uploadingPhoto = false);
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Upload failed. Try again.')),
-        );
-        return;
-      }
+      if (url == null) throw Exception('Upload failed');
 
-      // 2) خزّن في الباك (profilePicture)
       final prefs = await SharedPreferences.getInstance();
-      final token = prefs.getString('token') ?? '';
-      if (token.isEmpty) {
-        if (!mounted) return;
-        setState(() => _uploadingPhoto = false);
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Not logged in')),
-        );
-        return;
-      }
+      final token = prefs.getString('token');
+      if (token == null) throw Exception('Not authenticated');
 
       final res = await AuthService.updateMe(
         token: token,
         profilePicture: url,
       );
 
-      if (!mounted) return;
-
-      if (res['success'] == true) {
-        // 3) خزّن محليًا + حدّث UI
-        await prefs.setString('user_profilePicture', url);
-
-        setState(() {
-          _profileImageUrl = url;
-          _profileImageFile = null; // خلّي العرض من NetworkImage
-          _uploadingPhoto = false;
-        });
-
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('✅ Profile picture updated')),
-        );
-      } else {
-        setState(() => _uploadingPhoto = false);
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(res['message']?.toString() ?? 'Update failed')),
-        );
+      if (res['success'] != true) {
+        throw Exception(res['message'] ?? 'Update failed');
       }
+
+      await prefs.setString('user_profilePicture', url);
+
+      if (!mounted) return;
+      setState(() {
+        _profileImageUrl = url;
+        _profileImageFile = null;
+        _uploadingPhoto = false;
+      });
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('✅ Profile picture updated')),
+      );
     } catch (e) {
       if (!mounted) return;
       setState(() => _uploadingPhoto = false);
@@ -136,73 +120,48 @@ class _ProfileScreenState extends State<ProfileScreen> {
     }
   }
 
-  Future<void> _changeProfilePhoto() async {
+  void _changeProfilePhoto() {
     showModalBottomSheet(
       context: context,
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
       ),
-      builder: (ctx) {
-        return SafeArea(
-          child: SizedBox(
-            height: 180,
-            child: Column(
-              children: [
-                const SizedBox(height: 10),
-                Container(
-                  width: 40,
-                  height: 4,
-                  decoration: BoxDecoration(
-                    color: Colors.grey.shade300,
-                    borderRadius: BorderRadius.circular(10),
-                  ),
-                ),
-                const SizedBox(height: 20),
-                ListTile(
-                  leading: const Icon(Icons.photo_library),
-                  title: const Text("Choose from Gallery"),
-                  onTap: () async {
-                    Navigator.pop(context);
-                    await _pickAndUpload(ImageSource.gallery);
-                  },
-                ),
-                ListTile(
-                  leading: const Icon(Icons.camera_alt),
-                  title: const Text("Take a Photo"),
-                  onTap: () async {
-                    Navigator.pop(context);
-                    await _pickAndUpload(ImageSource.camera);
-                  },
-                ),
-              ],
+      builder: (_) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            ListTile(
+              leading: const Icon(Icons.photo_library),
+              title: const Text('Choose from Gallery'),
+              onTap: () {
+                Navigator.pop(context);
+                _pickAndUpload(ImageSource.gallery);
+              },
             ),
-          ),
-        );
-      },
+            ListTile(
+              leading: const Icon(Icons.camera_alt),
+              title: const Text('Take a Photo'),
+              onTap: () {
+                Navigator.pop(context);
+                _pickAndUpload(ImageSource.camera);
+              },
+            ),
+          ],
+        ),
+      ),
     );
   }
 
-  // ========================= Logout =========================
+  // ================= LOGOUT =================
   Future<void> _logout() async {
     final prefs = await SharedPreferences.getInstance();
-
-    await prefs.remove('token');
-    await prefs.remove('user_name');
-    await prefs.remove('user_email');
-    await prefs.remove('user_role');
-    await prefs.remove('user_level');
-    await prefs.remove('user_dailyGoal');
-    await prefs.remove('user_sex');
-    await prefs.remove('user_dob');
-    await prefs.remove('user_profilePicture');
-    await prefs.remove('completed_level_exam');
+    await prefs.clear();
 
     if (!mounted) return;
-
     Navigator.pushNamedAndRemoveUntil(
       context,
       '/welcome',
-      (route) => false,
+      (_) => false,
     );
   }
 
@@ -221,219 +180,137 @@ class _ProfileScreenState extends State<ProfileScreen> {
     return Scaffold(
       backgroundColor: const Color(0xFFF3F5F7),
       appBar: AppBar(
-        automaticallyImplyLeading: false,
+        title: const Text('Profile'),
         centerTitle: true,
-        elevation: 0,
         backgroundColor: const Color(0xFFF3F5F7),
-        title: const Text("Profile", style: TextStyle(fontWeight: FontWeight.w600)),
+        elevation: 0,
       ),
-      body: SafeArea(
-        child: SingleChildScrollView(
-          physics: const BouncingScrollPhysics(),
-          child: Column(
-            children: [
-              const SizedBox(height: 20),
+      body: SingleChildScrollView(
+        child: Column(
+          children: [
+            const SizedBox(height: 20),
 
-              Stack(
-                children: [
-                  CircleAvatar(
-                    radius: 70,
-                    backgroundColor: Colors.grey.shade300,
-                    backgroundImage: _avatarProvider(),
-                    child: _avatarProvider() == null
-                        ? const Icon(Icons.person, size: 70, color: Colors.white)
-                        : null,
+            // ===== Avatar =====
+            Stack(
+              children: [
+                CircleAvatar(
+                  radius: 70,
+                  backgroundColor: Colors.grey.shade300,
+                  backgroundImage: _avatarProvider(),
+                  child: _avatarProvider() == null
+                      ? const Icon(Icons.person, size: 70, color: Colors.white)
+                      : null,
+                ),
+                Positioned(
+                  bottom: 6,
+                  right: 6,
+                  child: GestureDetector(
+                    onTap: _uploadingPhoto ? null : _changeProfilePhoto,
+                    child: CircleAvatar(
+                      radius: 16,
+                      backgroundColor: primary,
+                      child: _uploadingPhoto
+                          ? const SizedBox(
+                              width: 16,
+                              height: 16,
+                              child: CircularProgressIndicator(
+                                strokeWidth: 2,
+                                color: Colors.white,
+                              ),
+                            )
+                          : const Icon(Icons.edit, size: 16, color: Colors.white),
+                    ),
                   ),
+                ),
+              ],
+            ),
 
-                  Positioned(
-                    bottom: 6,
-                    right: 6,
-                    child: GestureDetector(
-                      onTap: _uploadingPhoto ? null : _changeProfilePhoto,
-                      child: Container(
-                        padding: const EdgeInsets.all(6),
-                        decoration: BoxDecoration(
-                          color: primary,
-                          shape: BoxShape.circle,
-                          border: Border.all(color: Colors.white, width: 2),
+            const SizedBox(height: 14),
+            Text(_name, style: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold)),
+            const SizedBox(height: 4),
+            Text(_level, style: TextStyle(color: Colors.grey.shade600)),
+
+            const SizedBox(height: 30),
+
+            // ===== Actions =====
+            Container(
+              margin: const EdgeInsets.symmetric(horizontal: 16),
+              padding: const EdgeInsets.all(20),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(24),
+              ),
+              child: Column(
+                children: [
+                  _tile(Icons.person_outline, 'Edit Profile', primary, () async {
+                    await Navigator.pushNamed(context, '/edit_profile');
+                    _loadProfile();
+                  }),
+                  const SizedBox(height: 14),
+                  _tile(Icons.notifications_outlined, 'Notifications', primary, () {}),
+                  const SizedBox(height: 14),
+                  _tile(Icons.lock_outline, 'Change Password', primary, () {}),
+                  const SizedBox(height: 30),
+                  SizedBox(
+                    width: double.infinity,
+                    child: ElevatedButton.icon(
+                      onPressed: _logout,
+                      icon: const Icon(Icons.logout),
+                      label: const Text('Sign Out', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600)),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: Colors.red,
+                        foregroundColor: Colors.white,
+                        padding: const EdgeInsets.symmetric(vertical: 14),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(14),
                         ),
-                        child: _uploadingPhoto
-                            ? const SizedBox(
-                                width: 18,
-                                height: 18,
-                                child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
-                              )
-                            : const Icon(Icons.edit, size: 18, color: Colors.white),
                       ),
                     ),
                   ),
                 ],
               ),
-
-              const SizedBox(height: 14),
-
-              Text(_name, style: const TextStyle(fontSize: 22, fontWeight: FontWeight.w700)),
-              const SizedBox(height: 4),
-              Text(_level, style: TextStyle(fontSize: 14, color: Colors.grey.shade600)),
-
-              const SizedBox(height: 30),
-
-              Container(
-                margin: const EdgeInsets.symmetric(horizontal: 16),
-                padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 28),
-                width: double.infinity,
-                decoration: BoxDecoration(
-                  color: Colors.white,
-                  borderRadius: BorderRadius.circular(28),
-                  boxShadow: [
-                    BoxShadow(
-                      blurRadius: 18,
-                      offset: const Offset(0, 8),
-                      color: Colors.black.withOpacity(0.06),
-                    ),
-                  ],
-                ),
-                child: Column(
-                  children: [
-                    _ProfileOptionTile(
-                      icon: Icons.person_outline,
-                      label: "Edit Profile",
-                      color: primary,
-                      onTap: () async {
-                        final result = await Navigator.pushNamed(
-                          context,
-                          '/edit_profile',
-                          arguments: {
-                            'name': _name,
-                            'email': _email,
-                            'dob': _dateOfBirth,
-                            'sex': _sex,
-                            'dailyGoal': _dailyGoal,
-                            'level': _level,
-                          },
-                        );
-
-                        if (result is Map) {
-                          setState(() {
-                            _name = (result['name'] ?? _name) as String;
-                            _email = (result['email'] ?? _email) as String;
-                            _dateOfBirth = result['dob'] as String? ?? _dateOfBirth;
-                            _sex = result['sex'] as String? ?? _sex;
-                            _dailyGoal = result['dailyGoal'] as int? ?? _dailyGoal;
-                            _level = (result['level'] ?? _level) as String;
-                          });
-                        }
-                      },
-                    ),
-
-                    const SizedBox(height: 14),
-
-                    _ProfileOptionTile(
-                      icon: Icons.notifications_outlined,
-                      label: "Notifications",
-                      color: primary,
-                      onTap: () {},
-                    ),
-
-                    const SizedBox(height: 14),
-
-                    _ProfileOptionTile(
-                      icon: Icons.lock_outline,
-                      label: "Change Password",
-                      color: primary,
-                      onTap: () {},
-                    ),
-
-                    const SizedBox(height: 30),
-
-                    SizedBox(
-                      width: double.infinity,
-                      child: OutlinedButton.icon(
-                        onPressed: _logout,
-                        icon: const Icon(Icons.logout),
-                        label: const Text("Sign Out", style: TextStyle(fontSize: 16)),
-                        style: OutlinedButton.styleFrom(
-                          foregroundColor: primary,
-                          side: BorderSide(color: primary, width: 1.5),
-                          padding: const EdgeInsets.symmetric(vertical: 13),
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(14),
-                          ),
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-
-              const SizedBox(height: 40),
-            ],
-          ),
+            ),
+          ],
         ),
       ),
+
+      // ===== Bottom Nav =====
       bottomNavigationBar: BottomNavigationBar(
         currentIndex: _index,
         selectedItemColor: primary,
-        unselectedItemColor: Colors.grey,
         type: BottomNavigationBarType.fixed,
         onTap: (i) {
           if (i == 0) Navigator.pop(context);
           setState(() => _index = i);
         },
         items: const [
-          BottomNavigationBarItem(icon: Icon(Icons.home_outlined), label: "Home"),
-          BottomNavigationBarItem(icon: Icon(Icons.groups_outlined), label: "Community"),
-          BottomNavigationBarItem(icon: Icon(Icons.smart_toy_outlined), label: "Chatbot"),
-          BottomNavigationBarItem(icon: Icon(Icons.person), label: "Profile"),
+          BottomNavigationBarItem(icon: Icon(Icons.home_outlined), label: 'Home'),
+          BottomNavigationBarItem(icon: Icon(Icons.groups_outlined), label: 'Community'),
+          BottomNavigationBarItem(icon: Icon(Icons.smart_toy_outlined), label: 'Chatbot'),
+          BottomNavigationBarItem(icon: Icon(Icons.person), label: 'Profile'),
         ],
       ),
     );
   }
-}
 
-class _ProfileOptionTile extends StatelessWidget {
-  final IconData icon;
-  final String label;
-  final Color color;
-  final VoidCallback onTap;
-
-  const _ProfileOptionTile({
-    required this.icon,
-    required this.label,
-    required this.color,
-    required this.onTap,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Material(
-      color: Colors.transparent,
-      child: InkWell(
-        borderRadius: BorderRadius.circular(16),
-        onTap: onTap,
-        child: Padding(
-          padding: const EdgeInsets.symmetric(vertical: 10),
-          child: Row(
-            children: [
-              Container(
-                padding: const EdgeInsets.all(12),
-                decoration: BoxDecoration(
-                  color: color.withOpacity(0.12),
-                  shape: BoxShape.circle,
-                ),
-                child: Icon(icon, color: color, size: 22),
-              ),
-              const SizedBox(width: 16),
-              Expanded(
-                child: Text(
-                  label,
-                  style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w500),
-                ),
-              ),
-              const Icon(Icons.chevron_right, color: Colors.grey),
-            ],
+  Widget _tile(
+    IconData icon,
+    String label,
+    Color color,
+    VoidCallback onTap,
+  ) {
+    return InkWell(
+      onTap: onTap,
+      child: Row(
+        children: [
+          CircleAvatar(
+            backgroundColor: color.withOpacity(0.12),
+            child: Icon(icon, color: color),
           ),
-        ),
+          const SizedBox(width: 16),
+          Expanded(child: Text(label, style: const TextStyle(fontSize: 16))),
+          const Icon(Icons.chevron_right),
+        ],
       ),
     );
   }

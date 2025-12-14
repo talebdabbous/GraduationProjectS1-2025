@@ -17,7 +17,7 @@ class StartLevelPage extends StatelessWidget {
     // (اختياري) امسح المفتاح القديم لو كان موجود
     await prefs.remove('completed_level_exam');
 
-    // نجيب التوكن
+    // نجيب التوكنِ
     final token = prefs.getString('token');
 
     // لو في توكن → نحدّث البروفايل في الباك

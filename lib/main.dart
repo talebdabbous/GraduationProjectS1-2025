@@ -1,6 +1,5 @@
 // lib/main.dart
 import 'package:flutter/material.dart';
-import 'package:shared_preferences/shared_preferences.dart';
 
 // ============ AUTH / LOGIN SCREENS ============
 import 'login/welcome_screen.dart';
@@ -11,8 +10,8 @@ import 'login/reset_password_screen.dart';
 import 'login/check_auth.dart';
 
 // ============ LEVEL EXAM FLOW ============
-import 'level_exam/ask.dart';          // StartLevelPage
-import 'level_exam/level_exam.dart';   // LevelExamScreen
+import 'level_exam/ask.dart';
+import 'level_exam/level_exam.dart';
 
 // ============ HOME & PROFILE ============
 import 'Home_Screen/home_screen.dart';
@@ -37,83 +36,32 @@ class MyApp extends StatelessWidget {
         fontFamily: 'Arial',
       ),
 
-      // أول شاشة: CheckAuth
+      // أول شاشة
       initialRoute: '/',
 
       routes: {
-        // ================== AUTH / WELCOME ==================
+        // ================== AUTH ==================
         '/': (_) => const CheckAuth(),
         '/welcome': (_) => const WelcomeScreen(),
         '/login': (_) => const LoginScreen(),
         '/register': (_) => const RegisterScreen(),
         '/forgot': (_) => const ForgotPasswordScreen(),
 
-        // ================== LEVEL EXAM FLOW ==================
-        // شاشة السؤال: تعمل امتحان مستوى ولا تبدأ من الصفر؟
+        // ================== LEVEL EXAM ==================
         '/ask_level': (_) => StartLevelPage(),
-
-        // شاشة الامتحان نفسها (بتسحب من الباك إند)
         '/level_exam': (_) => LevelExamScreen(),
 
-        // ================== HOME SCREEN ==================
-        '/home_screen': (_) => FutureBuilder<SharedPreferences>(
-              future: SharedPreferences.getInstance(),
-              builder: (ctx, snap) {
-                if (!snap.hasData) {
-                  return const Scaffold(
-                    body: Center(child: CircularProgressIndicator()),
-                  );
-                }
+        // ================== HOME ==================
+        // ✅ HomeScreen صار self-contained
+        '/home_screen': (_) => const HomeScreen(),
 
-                final prefs = snap.data!;
+        // ================== PROFILE ==================
+        // ❌ لا تمرير بيانات — البروفايل لازم يجيب من الباك
+        '/profile_main_screen': (_) => const ProfileScreen(),
 
-                final userName = prefs.getString('user_name') ?? '';
-                final dailyStreak = prefs.getInt('daily_streak') ?? 0;
-                final points = prefs.getInt('user_points') ?? 0;
+        '/edit_profile': (_) => const EditProfileScreen(),
 
-                return HomeScreen(
-                  userName: userName,
-                  dailyStreak: dailyStreak,
-                  points: points,
-                );
-              },
-            ),
-
-        // ================== PROFILE MAIN SCREEN ==================
-        '/profile_main_screen': (_) => FutureBuilder<SharedPreferences>(
-              future: SharedPreferences.getInstance(),
-              builder: (ctx, snap) {
-                if (!snap.hasData) {
-                  return const Scaffold(
-                    body: Center(child: CircularProgressIndicator()),
-                  );
-                }
-
-                final prefs = snap.data!;
-
-                final name = prefs.getString('user_name') ?? '';
-                final email = prefs.getString('user_email') ?? '';
-                final level = prefs.getString('user_level') ?? '';
-
-                final dob = prefs.getString('user_dob');          // "YYYY-MM-DD" أو null
-                final sex = prefs.getString('user_sex');          // "Male"/"Female" أو null
-                final dailyGoal = prefs.getInt('user_dailyGoal'); // ممكن تكون null
-
-                return ProfileScreen(
-                  name: name,
-                  email: email,
-                  level: level,
-                  dateOfBirth: dob,
-                  sex: sex,
-                  dailyGoal: dailyGoal,
-                );
-              },
-            ),
-
-        // ================== EDIT PROFILE SCREEN ==================
-        '/edit_profile': (ctx) => const EditProfileScreen(),
-
-        // ================== RESET PASSWORD SCREEN ==================
+        // ================== RESET PASSWORD ==================
         '/reset_password': (ctx) {
           final args =
               ModalRoute.of(ctx)!.settings.arguments as Map<String, dynamic>;
