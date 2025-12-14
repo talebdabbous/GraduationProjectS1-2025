@@ -142,11 +142,14 @@ class _HomeScreenState extends State<HomeScreen> {
                       child: Row(
                         children: [
                           Expanded(
-                            child: _gradientCard(
-                              title: "Current Journey",
-                              subtitle: "Continue where you left off",
-                              icon: Icons.flag_outlined,
-                              colors: [primary, primary.withOpacity(0.6)],
+                            child: GestureDetector(
+                              onTap: () => Navigator.pushNamed(context, '/current_journey_screen'),
+                              child: _gradientCard(
+                                title: "Current Journey",
+                                subtitle: "Continue where you left off",
+                                icon: Icons.flag_outlined,
+                                colors: [primary, primary.withOpacity(0.6)],
+                              ),
                             ),
                           ),
                           const SizedBox(width: 12),
