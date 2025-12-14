@@ -171,11 +171,14 @@ class _HomeScreenState extends State<HomeScreen> {
                       child: Row(
                         children: [
                           Expanded(
-                            child: _gradientCard(
-                              title: "Vocabulary",
-                              subtitle: "Grow your word bank",
-                              icon: Icons.menu_book_outlined,
-                              colors: [Colors.orange, Colors.deepOrangeAccent],
+                            child: GestureDetector(
+                              onTap: () => Navigator.pushNamed(context, '/vocabulary_screen'),
+                              child: _gradientCard(
+                                title: "Vocabulary",
+                                subtitle: "Grow your word bank",
+                                icon: Icons.menu_book_outlined,
+                                colors: [Colors.orange, Colors.deepOrangeAccent],
+                              ),
                             ),
                           ),
                           const SizedBox(width: 12),
