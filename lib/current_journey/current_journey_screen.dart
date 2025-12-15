@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../services/current_journey_service.dart';
+import 'journey_stage_exam_screen.dart';
 
 class CurrentJourneyPage extends StatefulWidget {
   const CurrentJourneyPage({super.key});
@@ -179,13 +180,24 @@ class _CurrentJourneyPageState extends State<CurrentJourneyPage> {
     }
   }
 
-  void _onStageTap(int stageNumber) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text("Stage $stageNumber"),
-        duration: const Duration(milliseconds: 700),
+  void _onStageTap(int stageNumber) async {
+    if (_isLockedLevel(_selectedLevel)) return;
+
+    final res = await Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => JourneyStageExamScreen(
+          level: _selectedLevel.apiValue,
+          stage: stageNumber,
+        ),
       ),
     );
+
+    // لو رجع true => حدّث الخريطة
+    if (res == true) {
+      _loadCurrent();
+      _loadFor(_selectedLevel);
+    }
   }
 
   @override
