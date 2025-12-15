@@ -6,12 +6,20 @@ class JourneyOption {
   final String key;
   final String text;
 
-  JourneyOption({required this.key, required this.text});
+  // ✅ دعم صوت لكل خيار (اختياري)
+  final String? audioUrl;
+
+  JourneyOption({
+    required this.key,
+    required this.text,
+    this.audioUrl,
+  });
 
   factory JourneyOption.fromJson(Map<String, dynamic> json) {
     return JourneyOption(
       key: json['key']?.toString() ?? '',
       text: json['text']?.toString() ?? '',
+      audioUrl: json['audioUrl']?.toString(),
     );
   }
 }

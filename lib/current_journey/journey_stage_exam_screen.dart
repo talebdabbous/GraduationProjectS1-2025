@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:audioplayers/audioplayers.dart';
 import 'package:flutter_tts/flutter_tts.dart';
 import '../services/journey_exam_service.dart';
+import '../services/current_journey_service.dart';
 
 class JourneyStageExamScreen extends StatefulWidget {
   final String level; // beginner/intermediate/advanced
@@ -15,6 +16,21 @@ class JourneyStageExamScreen extends StatefulWidget {
 
   @override
   State<JourneyStageExamScreen> createState() => _JourneyStageExamScreenState();
+}
+
+// ✅ تتبع حالة كل سؤال
+class QuestionState {
+  final String questionId;
+  bool isCorrect;
+  bool answeredInReview; // true إذا تمت الإجابة في المراجعة
+  bool gotPoints; // true إذا حصل على نقاط
+
+  QuestionState({
+    required this.questionId,
+    this.isCorrect = false,
+    this.answeredInReview = false,
+    this.gotPoints = false,
+  });
 }
 
 class _JourneyStageExamScreenState extends State<JourneyStageExamScreen> {
@@ -32,6 +48,17 @@ class _JourneyStageExamScreenState extends State<JourneyStageExamScreen> {
 
   bool checking = false;
 
+  // ✅ نظام تتبع الإجابات والنقاط
+  Map<String, QuestionState> questionStates = {}; // questionId -> QuestionState
+  int totalPoints = 0;
+  bool isReviewMode = false; // true في وضع المراجعة
+  List<int> wrongQuestionIndices = []; // فهارس الأسئلة الخاطئة للمراجعة
+  int reviewIndex = 0; // الفهرس الحالي في المراجعة
+  
+  // ✅ التحقق من حالة المرحلة
+  bool? _isStageCompleted; // null = لم يتم التحقق بعد، true = مكتملة، false = غير مكتملة
+  int? _unlockedStage; // unlockedStage من الباك
+
   // ✅ Audio & TTS
   final AudioPlayer _audioPlayer = AudioPlayer();
   final FlutterTts _tts = FlutterTts();
@@ -45,7 +72,40 @@ class _JourneyStageExamScreenState extends State<JourneyStageExamScreen> {
   void initState() {
     super.initState();
     _initTts();
+    _initAudioPlayer();
     _loadQuestions();
+  }
+
+  // ✅ إعداد AudioPlayer مثل Level Exam
+  void _initAudioPlayer() {
+    _audioPlayer.setReleaseMode(ReleaseMode.stop);
+    _audioPlayer.setPlayerMode(PlayerMode.mediaPlayer);
+    _audioPlayer.setVolume(1.0);
+    _audioPlayer.setBalance(0.0);
+    
+    // استمع لحالة التشغيل
+    _audioPlayer.onPlayerStateChanged.listen((state) {
+      if (state == PlayerState.playing) {
+        print('✅ Audio is now playing!');
+      } else if (state == PlayerState.completed) {
+        print('✅ Audio playback completed');
+        if (mounted) setState(() => _isPlayingAudio = false);
+      } else if (state == PlayerState.stopped) {
+        print('⏹️ Audio stopped');
+        if (mounted) setState(() => _isPlayingAudio = false);
+      }
+    });
+    
+    // استمع للأخطاء
+    _audioPlayer.onLog.listen((log) {
+      print('🎵 AudioPlayer log: $log');
+    });
+    
+    // استمع لأخطاء التشغيل
+    _audioPlayer.onPlayerComplete.listen((_) {
+      print('✅ Audio playback finished');
+      if (mounted) setState(() => _isPlayingAudio = false);
+    });
   }
 
   Future<void> _initTts() async {
@@ -79,6 +139,26 @@ class _JourneyStageExamScreenState extends State<JourneyStageExamScreen> {
     });
 
     try {
+      // ✅ أولاً: تحميل بيانات المستوى الحالي للتحقق من unlockedStage و completedStages
+      final currentData = await CurrentJourneyService.fetchCurrent();
+      
+      if (!mounted) return;
+      
+      _unlockedStage = currentData.data.unlockedStage;
+      _isStageCompleted = currentData.data.completedStages.contains(widget.stage);
+      
+      // ✅ التحقق: يمكن الدخول على المراحل <= unlockedStage أو المراحل المكتملة مسبقاً
+      // إذا كان unlockedStage = 2، يمكن الدخول على stage 1 (مكتملة) و stage 2 (الحالية)
+      final canAccess = widget.stage <= _unlockedStage! || _isStageCompleted == true;
+      if (!canAccess) {
+        setState(() {
+          error = "Stage ${widget.stage} is locked. Unlocked stage is $_unlockedStage. Please complete previous stages first.";
+          loading = false;
+        });
+        return;
+      }
+      
+      // ✅ تحميل الأسئلة
       final data = await JourneyExamService.fetchStageQuestions(
         level: widget.level,
         stage: widget.stage,
@@ -88,6 +168,11 @@ class _JourneyStageExamScreenState extends State<JourneyStageExamScreen> {
       setState(() {
         questions = data;
         loading = false;
+        // تهيئة حالة الأسئلة
+        questionStates.clear();
+        for (var q in data) {
+          questionStates[q.id] = QuestionState(questionId: q.id);
+        }
       });
     } catch (e) {
       if (!mounted) return;
@@ -99,31 +184,95 @@ class _JourneyStageExamScreenState extends State<JourneyStageExamScreen> {
   }
 
   JourneyQuestion get q => questions[index];
-  bool get isLast => index == questions.length - 1;
+  bool get isLast {
+    if (isReviewMode) {
+      return reviewIndex == wrongQuestionIndices.length - 1;
+    }
+    return index == questions.length - 1;
+  }
 
   // ✅ نوع السؤال
   bool get _isWritingType => q.type == 'fill_blank' || q.type == 'writing';
   bool get _hasAudio => q.audioUrl != null && q.audioUrl!.isNotEmpty;
   bool get _hasImage => q.imageUrl != null && q.imageUrl!.isNotEmpty;
 
-  // ✅ تشغيل الصوت (audioUrl)
-  Future<void> _playAudio() async {
-    if (!_hasAudio) return;
-    
-    if (_isPlayingAudio) {
-      await _audioPlayer.stop();
-      setState(() => _isPlayingAudio = false);
+  // ✅ تشغيل TTS للخيار (قراءة نص الخيار)
+  Future<void> _playOptionAudio(JourneyOption opt) async {
+    if (opt.text.isEmpty) {
+      print('❌ Option text is empty!');
       return;
     }
 
-    setState(() => _isPlayingAudio = true);
+    print('🗣️ Speaking option text: ${opt.text}');
+    
     try {
-      await _audioPlayer.play(UrlSource(q.audioUrl!));
-      _audioPlayer.onPlayerComplete.listen((_) {
-        if (mounted) setState(() => _isPlayingAudio = false);
-      });
+      // إذا كان TTS شغال، أوقفه أولاً
+      if (_isSpeaking) {
+        await _tts.stop();
+      }
+      
+      // قراءة نص الخيار
+      await _tts.speak(opt.text);
+      print('✅ Option TTS started');
+      
     } catch (e) {
+      print('❌ Error speaking option: $e');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text("Failed to speak option: $e")),
+        );
+      }
+    }
+  }
+
+  // ✅ إيقاف الصوت
+  Future<void> _stopAudio() async {
+    try {
+      await _audioPlayer.stop();
       if (mounted) setState(() => _isPlayingAudio = false);
+    } catch (e) {
+      print('❌ Error stopping audio: $e');
+    }
+  }
+
+  // ✅ تشغيل الصوت (audioUrl للسؤال) - مثل Level Exam
+  Future<void> _playAudio() async {
+    if (!_hasAudio) return;
+    
+    final url = q.audioUrl!;
+    print('🎵 Attempting to play question audio from: $url');
+    
+    try {
+      await _stopAudio();
+      
+      // تحقق من أن URL صحيح
+      if (!url.startsWith('http://') && !url.startsWith('https://')) {
+        print('❌ Invalid audio URL format: $url');
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Invalid audio URL: $url')),
+        );
+        return;
+      }
+      
+      // تأكد من مستوى الصوت (1.0 = 100%)
+      await _audioPlayer.setVolume(1.0);
+      await _audioPlayer.setBalance(0.0);
+      
+      print('🔊 Playing question audio...');
+      setState(() => _isPlayingAudio = true);
+      
+      await _audioPlayer.play(UrlSource(url));
+      print('✅ Question audio play command sent successfully');
+      
+    } catch (e) {
+      print('❌ Error playing question audio: $e');
+      if (mounted) {
+        setState(() => _isPlayingAudio = false);
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text("Failed to play audio: $e")),
+        );
+      }
     }
   }
 
@@ -172,6 +321,25 @@ class _JourneyStageExamScreenState extends State<JourneyStageExamScreen> {
       );
 
       if (!mounted) return;
+
+      // ✅ تحديث حالة السؤال
+      final questionState = questionStates[q.id] ?? QuestionState(questionId: q.id);
+      questionState.isCorrect = res.correct;
+      
+      // ✅ إذا كان في وضع المراجعة، لا نعطي نقاط
+      if (isReviewMode) {
+        questionState.answeredInReview = true;
+      } else {
+        // ✅ فقط في المرة الأولى: إذا صح، نعطي 10 نقاط
+        // ✅ لكن فقط إذا كانت المرحلة غير مكتملة مسبقاً
+        if (res.correct && !questionState.gotPoints && _isStageCompleted != true) {
+          totalPoints += 10;
+          questionState.gotPoints = true;
+        }
+      }
+
+      questionStates[q.id] = questionState;
+
       setState(() {
         checked = true;
         isCorrect = res.correct;
@@ -181,17 +349,73 @@ class _JourneyStageExamScreenState extends State<JourneyStageExamScreen> {
       if (!mounted) return;
       setState(() => checking = false);
 
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text("Check failed: $e")),
-      );
+      // ✅ معالجة خطأ 409 (Stage not unlocked)
+      // إذا كانت المرحلة مكتملة مسبقاً، الباك قد يرفض فحص الإجابة
+      // في هذه الحالة، نعرض رسالة مختلفة ونسمح بالاستمرار (بدون نقاط)
+      final errorStr = e.toString();
+      if (errorStr.contains('409') || errorStr.contains('Stage not unlocked')) {
+        // إذا كانت المرحلة مكتملة مسبقاً، نعرض رسالة مختلفة
+        if (_isStageCompleted == true) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text("This stage is already completed. You can review it, but won't earn points."),
+              backgroundColor: Colors.orange,
+              duration: const Duration(seconds: 3),
+            ),
+          );
+          // نسمح بالاستمرار لكن بدون نقاط (تم التعامل معه في الكود)
+          // لكن الباك رفض فحص الإجابة، لذلك لا يمكننا المتابعة
+          // يجب تعديل الباك للسماح بفحص الإجابة على المراحل المكتملة
+        } else {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text("This stage is locked. Please complete previous stages first."),
+              backgroundColor: Colors.red,
+              duration: const Duration(seconds: 3),
+            ),
+          );
+          // العودة للخريطة
+          Future.delayed(const Duration(seconds: 1), () {
+            if (mounted) Navigator.pop(context);
+          });
+        }
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text("Check failed: $e")),
+        );
+      }
     }
   }
 
   void _next() {
     if (!checked) return;
 
+    // ✅ إذا كان في وضع المراجعة
+    if (isReviewMode) {
+      if (reviewIndex < wrongQuestionIndices.length - 1) {
+        // الانتقال للسؤال التالي في المراجعة
+        setState(() {
+          reviewIndex++;
+          index = wrongQuestionIndices[reviewIndex];
+          selectedKey = null;
+          writtenAnswer = '';
+          checked = false;
+          isCorrect = null;
+          checking = false;
+          _isPlayingAudio = false;
+        });
+        _audioPlayer.stop();
+      } else {
+        // انتهت المراجعة - تحقق من وجود أخطاء متبقية
+        _checkRemainingErrors();
+      }
+      return;
+    }
+
+    // ✅ الوضع العادي: الانتقال للسؤال التالي
     if (isLast) {
-      Navigator.pop(context, true);
+      // انتهت جميع الأسئلة - ابدأ المراجعة
+      _startReview();
       return;
     }
 
@@ -206,6 +430,105 @@ class _JourneyStageExamScreenState extends State<JourneyStageExamScreen> {
     });
     
     _audioPlayer.stop();
+  }
+
+  // ✅ بدء المراجعة للأخطاء
+  void _startReview() {
+    // جمع فهارس الأسئلة الخاطئة
+    wrongQuestionIndices.clear();
+    for (int i = 0; i < questions.length; i++) {
+      final state = questionStates[questions[i].id];
+      if (state == null || !state.isCorrect) {
+        wrongQuestionIndices.add(i);
+      }
+    }
+
+    if (wrongQuestionIndices.isEmpty) {
+      // كل الأسئلة صحيحة - اذهب لشاشة الإتمام مباشرة
+      _showCompletionScreen();
+      return;
+    }
+
+    // ابدأ المراجعة من أول سؤال خاطئ
+    setState(() {
+      isReviewMode = true;
+      reviewIndex = 0;
+      index = wrongQuestionIndices[0];
+      selectedKey = null;
+      writtenAnswer = '';
+      checked = false;
+      isCorrect = null;
+      checking = false;
+      _isPlayingAudio = false;
+    });
+    _audioPlayer.stop();
+  }
+
+  // ✅ التحقق من الأخطاء المتبقية بعد المراجعة
+  void _checkRemainingErrors() {
+    final remainingErrors = wrongQuestionIndices.where((idx) {
+      final state = questionStates[questions[idx].id];
+      return state == null || !state.isCorrect;
+    }).toList();
+
+    if (remainingErrors.isEmpty) {
+      // كل الأسئلة صحيحة الآن - اذهب لشاشة الإتمام
+      _showCompletionScreen();
+    } else {
+      // لا تزال هناك أخطاء - استمر في المراجعة
+      wrongQuestionIndices = remainingErrors;
+      setState(() {
+        reviewIndex = 0;
+        index = wrongQuestionIndices[0];
+        selectedKey = null;
+        writtenAnswer = '';
+        checked = false;
+        isCorrect = null;
+        checking = false;
+        _isPlayingAudio = false;
+      });
+      _audioPlayer.stop();
+    }
+  }
+
+  // ✅ عرض شاشة الإتمام
+  Future<void> _showCompletionScreen() async {
+    // ✅ تحديث الباك مع النقاط المكتسبة (فقط إذا كانت المرحلة غير مكتملة مسبقاً)
+    // ✅ إذا كانت مكتملة مسبقاً، لا نرسل نقاط (totalPoints = 0)
+    final pointsToSend = (_isStageCompleted == true) ? 0 : totalPoints;
+    
+    try {
+      await CurrentJourneyService.completeStage(
+        stage: widget.stage,
+        points: pointsToSend,
+      );
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text("Failed to update backend: $e")),
+        );
+      }
+    }
+
+    if (!mounted) return;
+
+    // عرض شاشة الإتمام
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => _CompletionDialog(
+        stage: widget.stage,
+        points: totalPoints,
+        onNextLevel: () {
+          Navigator.of(context).pop(); // إغلاق الدايلوج
+          Navigator.of(context).pop(true); // العودة للخريطة مع تحديث
+        },
+        onBackToMap: () {
+          Navigator.of(context).pop(); // إغلاق الدايلوج
+          Navigator.of(context).pop(true); // العودة للخريطة مع تحديث
+        },
+      ),
+    );
   }
 
   Color _optionBg(String key) {
@@ -259,6 +582,32 @@ class _JourneyStageExamScreenState extends State<JourneyStageExamScreen> {
               ),
               child: Row(
                 children: [
+                  // ✅ زر الصوت على اليسار (TTS للخيار)
+                  IconButton(
+                    onPressed: opt.text.isNotEmpty
+                        ? () => _playOptionAudio(opt)
+                        : null,
+                    icon: Icon(
+                      _isSpeaking ? Icons.stop_circle : Icons.volume_up,
+                      color: opt.text.isNotEmpty
+                          ? (_isSpeaking ? Colors.red : accent)
+                          : Colors.grey.shade400,
+                    ),
+                  ),
+                  const SizedBox(width: 4),
+                  // ✅ نص الخيار في المنتصف
+                  Expanded(
+                    child: Text(
+                      opt.text,
+                      textAlign: TextAlign.center,
+                      style: TextStyle(
+                        fontWeight: FontWeight.w700,
+                        color: checked && key == selectedKey ? Colors.white : Colors.black87,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  // ✅ دائرة A/B/C/D على اليمين
                   Container(
                     width: 28,
                     height: 28,
@@ -277,17 +626,7 @@ class _JourneyStageExamScreenState extends State<JourneyStageExamScreen> {
                       ),
                     ),
                   ),
-                  const SizedBox(width: 10),
-                  Expanded(
-                    child: Text(
-                      opt.text,
-                      textAlign: TextAlign.center,
-                      style: TextStyle(
-                        fontWeight: FontWeight.w700,
-                        color: checked && key == selectedKey ? Colors.white : Colors.black87,
-                      ),
-                    ),
-                  ),
+                  const SizedBox(width: 6),
                   _optionTrailing(key),
                 ],
               ),
@@ -351,7 +690,7 @@ class _JourneyStageExamScreenState extends State<JourneyStageExamScreen> {
               ),
               const SizedBox(width: 8),
               Text(
-                isCorrect == true ? 'Correct!' : 'Try again next time',
+                isCorrect == true ? 'Correct answer!' : 'Wrong answer',
                 style: TextStyle(
                   fontWeight: FontWeight.w900,
                   color: isCorrect == true ? const Color(0xFF10B981) : const Color(0xFFEF4444),
@@ -427,22 +766,42 @@ class _JourneyStageExamScreenState extends State<JourneyStageExamScreen> {
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
                   Text(
-                    "Question ${index + 1} of ${questions.length}",
+                    isReviewMode
+                        ? "Review: ${reviewIndex + 1} of ${wrongQuestionIndices.length}"
+                        : "Question ${index + 1} of ${questions.length}",
                     style: const TextStyle(fontWeight: FontWeight.w700),
                   ),
-                  Text("${(((index + 1) / questions.length) * 100).round()}%"),
+                  if (!isReviewMode)
+                    Text("${(((index + 1) / questions.length) * 100).round()}%"),
                 ],
               ),
               const SizedBox(height: 10),
-              ClipRRect(
-                borderRadius: BorderRadius.circular(999),
-                child: LinearProgressIndicator(
-                  value: (index + 1) / questions.length,
-                  minHeight: 8,
-                  backgroundColor: Colors.white,
-                  valueColor: AlwaysStoppedAnimation<Color>(accent),
+              if (!isReviewMode)
+                ClipRRect(
+                  borderRadius: BorderRadius.circular(999),
+                  child: LinearProgressIndicator(
+                    value: (index + 1) / questions.length,
+                    minHeight: 8,
+                    backgroundColor: Colors.white,
+                    valueColor: AlwaysStoppedAnimation<Color>(accent),
+                  ),
+                )
+              else
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                  decoration: BoxDecoration(
+                    color: Colors.orange.shade100,
+                    borderRadius: BorderRadius.circular(999),
+                    border: Border.all(color: Colors.orange.shade300, width: 2),
+                  ),
+                  child: Text(
+                    "Review Mode - Fix your mistakes",
+                    style: TextStyle(
+                      fontWeight: FontWeight.w700,
+                      color: Colors.orange.shade900,
+                    ),
+                  ),
                 ),
-              ),
 
               const SizedBox(height: 16),
 
@@ -531,12 +890,22 @@ class _JourneyStageExamScreenState extends State<JourneyStageExamScreen> {
               if (checked)
                 Align(
                   alignment: Alignment.centerLeft,
-                  child: Text(
-                    (isCorrect == true) ? "Correct!" : "Wrong answer",
-                    style: TextStyle(
-                      fontWeight: FontWeight.w900,
-                      color: (isCorrect == true) ? const Color(0xFF10B981) : const Color(0xFFEF4444),
-                    ),
+                  child: Row(
+                    children: [
+                      Icon(
+                        isCorrect == true ? Icons.check_circle : Icons.cancel,
+                        color: isCorrect == true ? const Color(0xFF10B981) : const Color(0xFFEF4444),
+                        size: 24,
+                      ),
+                      const SizedBox(width: 8),
+                      Text(
+                        isCorrect == true ? "Correct answer!" : "Wrong answer",
+                        style: TextStyle(
+                          fontWeight: FontWeight.w900,
+                          color: isCorrect == true ? const Color(0xFF10B981) : const Color(0xFFEF4444),
+                        ),
+                      ),
+                    ],
                   ),
                 ),
 
@@ -571,13 +940,164 @@ class _JourneyStageExamScreenState extends State<JourneyStageExamScreen> {
                           child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
                         )
                       : Text(
-                          !checked ? "Check" : (isLast ? "Finish" : "Next"),
+                          !checked 
+                              ? "Check" 
+                              : (isLast 
+                                  ? (isReviewMode ? "Finish Review" : "Finish")
+                                  : "Next"),
                           style: const TextStyle(fontWeight: FontWeight.w900),
                         ),
                 ),
               ),
             ],
           ),
+        ),
+      ),
+    );
+  }
+}
+
+// ✅ شاشة الإتمام
+class _CompletionDialog extends StatelessWidget {
+  final int stage;
+  final int points;
+  final VoidCallback onNextLevel;
+  final VoidCallback onBackToMap;
+
+  const _CompletionDialog({
+    required this.stage,
+    required this.points,
+    required this.onNextLevel,
+    required this.onBackToMap,
+  });
+
+  Color get bg => const Color(0xFFF7F3E9);
+  Color get accent => const Color(0xFF0D9488);
+
+  @override
+  Widget build(BuildContext context) {
+    return Dialog(
+      backgroundColor: Colors.transparent,
+      child: Container(
+        padding: const EdgeInsets.all(24),
+        decoration: BoxDecoration(
+          color: bg,
+          borderRadius: BorderRadius.circular(24),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withOpacity(0.1),
+              blurRadius: 20,
+              offset: const Offset(0, 10),
+            ),
+          ],
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            // ✅ أيقونة النجاح
+            Container(
+              width: 80,
+              height: 80,
+              decoration: BoxDecoration(
+                color: const Color(0xFF10B981),
+                shape: BoxShape.circle,
+              ),
+              child: const Icon(
+                Icons.check,
+                color: Colors.white,
+                size: 50,
+              ),
+            ),
+            const SizedBox(height: 20),
+            
+            // ✅ عنوان مبروك
+            const Text(
+              "Congratulations!",
+              style: TextStyle(
+                fontSize: 28,
+                fontWeight: FontWeight.w900,
+                color: Colors.black87,
+              ),
+            ),
+            const SizedBox(height: 8),
+            
+            // ✅ رسالة الإتمام
+            Text(
+              "You have completed Stage $stage!",
+              textAlign: TextAlign.center,
+              style: const TextStyle(
+                fontSize: 18,
+                fontWeight: FontWeight.w700,
+                color: Colors.black87,
+              ),
+            ),
+            const SizedBox(height: 24),
+            
+            // ✅ عرض النقاط
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(16),
+                border: Border.all(color: accent, width: 2),
+              ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(Icons.stars, color: accent, size: 28),
+                  const SizedBox(width: 12),
+                  Text(
+                    "Points Earned: $points",
+                    style: TextStyle(
+                      fontSize: 20,
+                      fontWeight: FontWeight.w900,
+                      color: accent,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 24),
+            
+            // ✅ أزرار التنقل
+            SizedBox(
+              width: double.infinity,
+              child: ElevatedButton(
+                onPressed: onNextLevel,
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: accent,
+                  foregroundColor: Colors.white,
+                  padding: const EdgeInsets.symmetric(vertical: 14),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(999),
+                  ),
+                ),
+                child: const Text(
+                  "Go to Next Level",
+                  style: TextStyle(fontWeight: FontWeight.w900),
+                ),
+              ),
+            ),
+            const SizedBox(height: 12),
+            SizedBox(
+              width: double.infinity,
+              child: OutlinedButton(
+                onPressed: onBackToMap,
+                style: OutlinedButton.styleFrom(
+                  foregroundColor: accent,
+                  side: BorderSide(color: accent, width: 2),
+                  padding: const EdgeInsets.symmetric(vertical: 14),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(999),
+                  ),
+                ),
+                child: const Text(
+                  "Back to Map",
+                  style: TextStyle(fontWeight: FontWeight.w900),
+                ),
+              ),
+            ),
+          ],
         ),
       ),
     );

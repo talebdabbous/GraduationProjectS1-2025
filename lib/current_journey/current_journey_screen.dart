@@ -183,6 +183,21 @@ class _CurrentJourneyPageState extends State<CurrentJourneyPage> {
   void _onStageTap(int stageNumber) async {
     if (_isLockedLevel(_selectedLevel)) return;
 
+    // ✅ التحقق: يمكن الدخول على المراحل <= unlockedStage أو المراحل المكتملة مسبقاً
+    final currentUnlockedStage = _currentLevelData?.unlockedStage ?? 1;
+    final completedStages = _currentLevelData?.completedStages ?? <int>[];
+    final isCompleted = completedStages.contains(stageNumber);
+    final canAccess = stageNumber <= currentUnlockedStage || isCompleted;
+    
+    if (!canAccess) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text("Stage $stageNumber is locked. Unlocked stage is $currentUnlockedStage. Please complete previous stages first."),
+        ),
+      );
+      return;
+    }
+
     final res = await Navigator.push(
       context,
       MaterialPageRoute(

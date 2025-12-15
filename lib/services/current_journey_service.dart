@@ -142,15 +142,21 @@ class CurrentJourneyService {
   }
 
   /// ✅ NEW: لما المستخدم يخلص Stage (خصوصًا 15 -> بيرجع level جديد)
-  /// body: { "stage": 1..15 }
-  static Future<CurrentJourneyResponse> completeStage(int stage) async {
+  /// body: { "stage": 1..15, "points": عدد النقاط المكتسبة }
+  static Future<CurrentJourneyResponse> completeStage({
+    required int stage,
+    required int points,
+  }) async {
     final token = await _token();
     final uri = Uri.parse("$baseUrl$endpointCompleteStage");
 
     final res = await http.post(
       uri,
       headers: _headers(token),
-      body: jsonEncode({"stage": stage}),
+      body: jsonEncode({
+        "stage": stage,
+        "points": points,
+      }),
     );
 
     if (res.statusCode < 200 || res.statusCode >= 300) {
@@ -159,7 +165,7 @@ class CurrentJourneyService {
 
     final json = jsonDecode(res.body) as Map<String, dynamic>;
 
-    // ✅ الباك بيرجع currentLevel + باقي الحقول
+    // ✅ الباك بيرجع currentLevel + باقي الحقول (مع النقاط المحدثة)
     return CurrentJourneyResponse.fromJson(json);
   }
 }
