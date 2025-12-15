@@ -1,14 +1,28 @@
 import 'dart:convert';
 import 'package:http/http.dart' as http;
+import 'device_id_service.dart';
 
 class VocabularyService {
   // Base URL for Android emulator
   static const String baseUrl = 'http://10.0.2.2:4000/api/v1';
 
+  /// Get headers with device ID
+  static Future<Map<String, String>> _getHeaders() async {
+    final deviceId = await DeviceIdService.getOrCreateDeviceId();
+    print('🔑 Device ID: $deviceId');
+    return {
+      'Content-Type': 'application/json',
+      'x-device-id': deviceId,
+    };
+  }
+
   /// Get vocabulary options (categories, etc.)
   static Future<Map<String, dynamic>> getOptions() async {
     final url = Uri.parse('$baseUrl/vocabulary/options');
-    final response = await http.get(url);
+    print('📡 GET Request URL: $url');
+    final headers = await _getHeaders();
+    final response = await http.get(url, headers: headers);
+    print('📥 Response Status: ${response.statusCode}');
 
     if (response.statusCode != 200) {
       final body = json.decode(response.body);
@@ -45,6 +59,7 @@ class VocabularyService {
     String mode = 'preset', // Default to 'preset', can be 'custom'
   }) async {
     final url = Uri.parse('$baseUrl/vocabulary/session/start');
+    print('📡 POST Request URL: $url');
     
     // Normalize category names to backend format
     final normalizedCategories = categories.map(_normalizeCategory).toList();
@@ -56,11 +71,13 @@ class VocabularyService {
       if (level != null) 'level': level,
     };
 
+    final headers = await _getHeaders();
     final response = await http.post(
       url,
-      headers: {'Content-Type': 'application/json'},
+      headers: headers,
       body: json.encode(requestBody),
     );
+    print('📥 Response Status: ${response.statusCode}');
 
     if (response.statusCode != 200) {
       final body = json.decode(response.body);
@@ -94,16 +111,19 @@ class VocabularyService {
     final url = Uri.parse(
       '$baseUrl/vocabulary/session/$sessionId/word/$wordId',
     );
+    print('📡 PATCH Request URL: $url');
 
     final requestBody = <String, dynamic>{};
     if (learned != null) requestBody['learned'] = learned;
     if (saved != null) requestBody['saved'] = saved;
 
+    final headers = await _getHeaders();
     final response = await http.patch(
       url,
-      headers: {'Content-Type': 'application/json'},
+      headers: headers,
       body: json.encode(requestBody),
     );
+    print('📥 Response Status: ${response.statusCode}');
 
     if (response.statusCode != 200) {
       final body = json.decode(response.body);
@@ -116,11 +136,14 @@ class VocabularyService {
   /// Returns: {learnedCount, savedCount}
   static Future<Map<String, dynamic>> finishSession(String sessionId) async {
     final url = Uri.parse('$baseUrl/vocabulary/session/$sessionId/finish');
+    print('📡 POST Request URL: $url');
 
+    final headers = await _getHeaders();
     final response = await http.post(
       url,
-      headers: {'Content-Type': 'application/json'},
+      headers: headers,
     );
+    print('📥 Response Status: ${response.statusCode}');
 
     if (response.statusCode != 200) {
       final body = json.decode(response.body);
