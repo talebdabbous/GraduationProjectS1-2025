@@ -4,9 +4,15 @@ import 'package:google_fonts/google_fonts.dart';
 class WelcomeScreen extends StatelessWidget {
   const WelcomeScreen({super.key});
 
+  // ألوان من level exam و vocabulary
+  static const backgroundColor = Color(0xFFF5F1E8); // بيج فاتح
+  static const primaryColor = Color(0xFF14B8A6); // Teal
+  static const darkTealColor = Color(0xFF0D9488); // Teal غامق
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
+      backgroundColor: backgroundColor,
       body: Stack(
         fit: StackFit.expand,
         children: [
@@ -60,7 +66,7 @@ class WelcomeScreen extends StatelessWidget {
                         child: ElevatedButton(
                           style: ElevatedButton.styleFrom(
                             backgroundColor: Colors.white,
-                            foregroundColor: const Color(0xFF0EA5E9),
+                            foregroundColor: darkTealColor,
                             padding: const EdgeInsets.symmetric(vertical: 14),
                             shape: RoundedRectangleBorder(
                               borderRadius: BorderRadius.circular(14),
@@ -79,7 +85,7 @@ class WelcomeScreen extends StatelessWidget {
                         width: double.infinity,
                         child: OutlinedButton(
                           style: OutlinedButton.styleFrom(
-                            backgroundColor: const Color(0xFF0EA5E9),
+                            backgroundColor: darkTealColor,
                             foregroundColor: Colors.white,
                             padding: const EdgeInsets.symmetric(vertical: 14),
                             shape: RoundedRectangleBorder(

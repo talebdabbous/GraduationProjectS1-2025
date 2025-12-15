@@ -23,9 +23,15 @@ class _ResetPasswordScreenState extends State<ResetPasswordScreen> {
     super.dispose();
   }
 
+  // ألوان من level exam و vocabulary
+  static const backgroundColor = Color(0xFFF5F1E8); // بيج فاتح
+  static const primaryColor = Color(0xFF14B8A6); // Teal
+  static const darkTealColor = Color(0xFF0D9488); // Teal غامق
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
+      backgroundColor: backgroundColor,
       body: Stack(
         fit: StackFit.expand,
         children: [
@@ -46,7 +52,7 @@ class _ResetPasswordScreenState extends State<ResetPasswordScreen> {
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.stretch,
                         children: [
-                          const Text("Set new password", textAlign: TextAlign.center, style: TextStyle(fontSize: 26, fontWeight: FontWeight.bold, color: Color(0xFF0EA5E9))),
+                          const Text("Set new password", textAlign: TextAlign.center, style: TextStyle(fontSize: 26, fontWeight: FontWeight.bold, color: darkTealColor)),
                           const SizedBox(height: 16),
                           TextField(
                             controller: passCtrl,
@@ -72,7 +78,7 @@ class _ResetPasswordScreenState extends State<ResetPasswordScreen> {
                           ElevatedButton(
                             onPressed: isLoading ? null : _finalize,
                             style: ElevatedButton.styleFrom(
-                              backgroundColor: const Color(0xFF22C55E),
+                              backgroundColor: darkTealColor,
                               foregroundColor: Colors.white,
                               padding: const EdgeInsets.symmetric(vertical: 14),
                               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),

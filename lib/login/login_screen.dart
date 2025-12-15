@@ -132,7 +132,7 @@ class _LoginScreenState extends State<LoginScreen> {
             "✅ Logged in successfully!",
             style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
           ),
-          backgroundColor: const Color(0xFF219EBC),
+          backgroundColor: darkTealColor,
           behavior: SnackBarBehavior.floating,
           margin: const EdgeInsets.all(16),
           shape: RoundedRectangleBorder(
@@ -306,9 +306,15 @@ class _LoginScreenState extends State<LoginScreen> {
     );
   }
 
+  // ألوان من level exam و vocabulary
+  static const backgroundColor = Color(0xFFF5F1E8); // بيج فاتح
+  static const primaryColor = Color(0xFF14B8A6); // Teal
+  static const darkTealColor = Color(0xFF0D9488); // Teal غامق
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
+      backgroundColor: backgroundColor,
       body: Stack(
         fit: StackFit.expand,
         children: [
@@ -338,7 +344,7 @@ class _LoginScreenState extends State<LoginScreen> {
                             style: TextStyle(
                               fontSize: 26,
                               fontWeight: FontWeight.bold,
-                              color: Color(0xFF0EA5E9),
+                              color: darkTealColor,
                             ),
                           ),
                           const SizedBox(height: 24),
@@ -387,7 +393,7 @@ class _LoginScreenState extends State<LoginScreen> {
                           ElevatedButton(
                             onPressed: isLoading ? null : _login,
                             style: ElevatedButton.styleFrom(
-                              backgroundColor: const Color(0xFF0EA5E9),
+                              backgroundColor: darkTealColor,
                               foregroundColor: Colors.white,
                               padding: const EdgeInsets.symmetric(vertical: 14),
                               shape: RoundedRectangleBorder(
@@ -427,7 +433,7 @@ class _LoginScreenState extends State<LoginScreen> {
                             label: const Text(
                               "Back ",
                               style: TextStyle(
-                                color: Color(0xFF0EA5E9),
+                                color: darkTealColor,
                                 fontSize: 16,
                                 fontWeight: FontWeight.w600,
                               ),

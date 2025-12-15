@@ -154,11 +154,14 @@ class _HomeScreenState extends State<HomeScreen> {
                           ),
                           const SizedBox(width: 12),
                           Expanded(
-                            child: _gradientCard(
-                              title: "Letter Writing",
-                              subtitle: "Practice Arabic letters",
-                              icon: Icons.edit_note_outlined,
-                              colors: [Colors.deepPurple, Colors.deepPurpleAccent],
+                            child: GestureDetector(
+                              onTap: () => Navigator.pushNamed(context, '/letter-writing'),
+                              child: _gradientCard(
+                                title: "Letter Writing",
+                                subtitle: "Practice Arabic letters",
+                                icon: Icons.edit_note_outlined,
+                                colors: [Colors.deepPurple, Colors.deepPurpleAccent],
+                              ),
                             ),
                           ),
                         ],

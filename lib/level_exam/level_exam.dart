@@ -128,38 +128,44 @@ class _LevelExamScreenState extends State<LevelExamScreen> {
   
   Future<void> _speakText(String text, {String? language}) async {
     try {
+      // إيقاف TTS أولاً إذا كان يعمل
       if (_isTtsSpeaking) {
         await _flutterTts.stop();
+        // انتظار قصير للتأكد من إيقاف TTS بشكل كامل
+        await Future.delayed(const Duration(milliseconds: 100));
       }
       
-      setState(() => _isTtsSpeaking = true);
+      // إيقاف أي صوت آخر قد يكون قيد التشغيل
+      await _flutterTts.stop();
       
       // تحديد اللغة تلقائياً إذا لم يتم تحديدها
       final langToUse = language ?? _detectLanguage(text);
-      await _flutterTts.setLanguage(langToUse);
       
       // تحسين الإعدادات حسب اللغة
       if (langToUse.startsWith('en')) {
         // إعدادات أفضل للإنجليزية
+        await _flutterTts.setLanguage('en-US');
         await _flutterTts.setSpeechRate(0.5); // سرعة متوسطة
         await _flutterTts.setVolume(1.0);
         await _flutterTts.setPitch(1.0);
       } else if (langToUse.startsWith('ar')) {
         // إعدادات محسنة للعربية
+        await _flutterTts.setLanguage('ar-SA'); // اللغة العربية السعودية (أفضل جودة)
         await _flutterTts.setSpeechRate(0.45); // سرعة أبطأ قليلاً للوضوح
         await _flutterTts.setVolume(1.0); // صوت عالي
         await _flutterTts.setPitch(1.0); // نبرة طبيعية
-        // استخدام اللغة العربية السعودية (أفضل جودة)
-        if (langToUse != 'ar-SA') {
-          await _flutterTts.setLanguage('ar-SA');
-        }
       } else {
         // إعدادات افتراضية للغات الأخرى
+        await _flutterTts.setLanguage(langToUse);
         await _flutterTts.setSpeechRate(0.5);
         await _flutterTts.setVolume(1.0);
         await _flutterTts.setPitch(1.0);
       }
       
+      // تحديث الحالة قبل البدء
+      setState(() => _isTtsSpeaking = true);
+      
+      // تشغيل الصوت
       await _flutterTts.speak(text);
       print('🗣️ Speaking: $text (Language: $langToUse)');
     } catch (e) {
@@ -356,6 +362,7 @@ class _LevelExamScreenState extends State<LevelExamScreen> {
 
   void _goNext(List<LevelQuestion> questions) async {
     await _stopAudio();
+    await _stopTts(); // إيقاف TTS عند الانتقال للسؤال التالي
 
     final q = questions[_currentIndex];
 
@@ -388,6 +395,7 @@ class _LevelExamScreenState extends State<LevelExamScreen> {
 
   void _goPrevious() async {
     await _stopAudio();
+    await _stopTts(); // إيقاف TTS عند العودة للسؤال السابق
     if (_currentIndex == 0) return;
     setState(() => _currentIndex -= 1);
   }

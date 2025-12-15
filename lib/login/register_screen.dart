@@ -99,9 +99,15 @@ class _RegisterScreenState extends State<RegisterScreen> {
     }
   }
 
+  // ألوان من level exam و vocabulary
+  static const backgroundColor = Color(0xFFF5F1E8); // بيج فاتح
+  static const primaryColor = Color(0xFF14B8A6); // Teal
+  static const darkTealColor = Color(0xFF0D9488); // Teal غامق
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
+      backgroundColor: backgroundColor,
       body: Stack(
         fit: StackFit.expand,
         children: [
@@ -131,7 +137,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
                             style: TextStyle(
                               fontSize: 26,
                               fontWeight: FontWeight.bold,
-                              color: Color(0xFF22C55E),
+                              color: darkTealColor,
                             ),
                           ),
                           const SizedBox(height: 24),
@@ -239,7 +245,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
                           ElevatedButton(
                             onPressed: isLoading ? null : _register,
                             style: ElevatedButton.styleFrom(
-                              backgroundColor: const Color(0xFF22C55E),
+                              backgroundColor: darkTealColor,
                               foregroundColor: Colors.white,
                               padding: const EdgeInsets.symmetric(vertical: 14),
                               shape: RoundedRectangleBorder(

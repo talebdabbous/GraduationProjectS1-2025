@@ -20,9 +20,15 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
     super.dispose();
   }
 
+  // ألوان من level exam و vocabulary
+  static const backgroundColor = Color(0xFFF5F1E8); // بيج فاتح
+  static const primaryColor = Color(0xFF14B8A6); // Teal
+  static const darkTealColor = Color(0xFF0D9488); // Teal غامق
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
+      backgroundColor: backgroundColor,
       body: Stack(
         fit: StackFit.expand,
         children: [
@@ -44,7 +50,7 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
                         crossAxisAlignment: CrossAxisAlignment.stretch,
                         children: [
                           const SizedBox(height: 8),
-                          const Text("Reset Password", textAlign: TextAlign.center, style: TextStyle(fontSize: 26, fontWeight: FontWeight.bold, color: Color(0xFF0EA5E9))),
+                          const Text("Reset Password", textAlign: TextAlign.center, style: TextStyle(fontSize: 26, fontWeight: FontWeight.bold, color: darkTealColor)),
                           const SizedBox(height: 16),
                           const Text("Enter your email. We'll send you a reset code immediately.", textAlign: TextAlign.center),
                           const SizedBox(height: 16),
@@ -64,7 +70,7 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
                             onPressed: isLoading ? null : _sendCodeThenPromptOtp,
                             style: ElevatedButton.styleFrom(
                               padding: const EdgeInsets.symmetric(vertical: 14),
-                              backgroundColor: const Color(0xFF22C55E),
+                              backgroundColor: darkTealColor,
                               foregroundColor: Colors.white,
                               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                             ),

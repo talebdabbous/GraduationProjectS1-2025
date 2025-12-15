@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_tts/flutter_tts.dart';
 import '../services/vocabulary_service.dart';
+import 'vocabulary_card.dart';
 
 class VocabularyScreen extends StatefulWidget {
   const VocabularyScreen({super.key});
@@ -29,6 +31,10 @@ class _VocabularyScreenState extends State<VocabularyScreen> {
   int _currentWordIndex = 0; // Index of currently displayed word
   String? _sessionId; // Store session ID from backend
 
+  // TTS
+  final FlutterTts _flutterTts = FlutterTts();
+  bool _isTtsSpeaking = false;
+
   final List<Map<String, dynamic>> _categories = [
     {'label': 'Work', 'icon': Icons.work_outline},
     {'label': 'Study', 'icon': Icons.school_outlined},
@@ -48,6 +54,108 @@ class _VocabularyScreenState extends State<VocabularyScreen> {
   @override
   void initState() {
     super.initState();
+    _initTts();
+  }
+
+  @override
+  void dispose() {
+    _flutterTts.stop();
+    super.dispose();
+  }
+
+  Future<void> _initTts() async {
+    try {
+      // Try to use Google TTS engine (better for Arabic)
+      final engines = await _flutterTts.getEngines;
+      if (engines != null && engines.isNotEmpty) {
+        final googleEngine = engines.firstWhere(
+          (engine) => engine['name']?.toString().toLowerCase().contains('google') ?? false,
+          orElse: () => engines.first,
+        );
+        if (googleEngine['name'] != null) {
+          await _flutterTts.setEngine(googleEngine['name']);
+        }
+      }
+    } catch (e) {
+      print('⚠️ Could not set TTS engine: $e');
+    }
+    
+    // Default settings
+    await _flutterTts.setLanguage("ar-SA"); // Arabic - Saudi Arabia (best quality)
+    await _flutterTts.setSpeechRate(0.45); // Slightly slower for better quality
+    await _flutterTts.setVolume(1.0);
+    await _flutterTts.setPitch(1.0);
+    
+    _flutterTts.setCompletionHandler(() {
+      setState(() => _isTtsSpeaking = false);
+    });
+    
+    _flutterTts.setErrorHandler((msg) {
+      print('❌ TTS Error: $msg');
+      setState(() => _isTtsSpeaking = false);
+    });
+  }
+
+  // Detect language automatically based on text
+  String _detectLanguage(String text) {
+    final arabicPattern = RegExp(r'[\u0600-\u06FF]');
+    if (arabicPattern.hasMatch(text)) {
+      return 'ar-SA'; // Arabic - Saudi Arabia (best quality)
+    } else {
+      return 'en-US'; // English - US (best quality)
+    }
+  }
+
+  Future<void> _speakText(String text, {String? language}) async {
+    try {
+      if (_isTtsSpeaking) {
+        await _flutterTts.stop();
+      }
+      
+      setState(() => _isTtsSpeaking = true);
+      
+      // Detect language automatically if not specified
+      final langToUse = language ?? _detectLanguage(text);
+      await _flutterTts.setLanguage(langToUse);
+      
+      // Optimize settings based on language
+      if (langToUse.startsWith('en')) {
+        await _flutterTts.setSpeechRate(0.5);
+        await _flutterTts.setVolume(1.0);
+        await _flutterTts.setPitch(1.0);
+      } else if (langToUse.startsWith('ar')) {
+        await _flutterTts.setSpeechRate(0.45);
+        await _flutterTts.setVolume(1.0);
+        await _flutterTts.setPitch(1.0);
+        if (langToUse != 'ar-SA') {
+          await _flutterTts.setLanguage('ar-SA');
+        }
+      } else {
+        await _flutterTts.setSpeechRate(0.5);
+        await _flutterTts.setVolume(1.0);
+        await _flutterTts.setPitch(1.0);
+      }
+      
+      await _flutterTts.speak(text);
+      print('🗣️ Speaking: $text (Language: $langToUse)');
+    } catch (e) {
+      print('❌ TTS Error: $e');
+      setState(() => _isTtsSpeaking = false);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Could not speak text: $e')),
+        );
+      }
+    }
+  }
+
+  Future<void> _stopTts() async {
+    try {
+      await _flutterTts.stop();
+      setState(() => _isTtsSpeaking = false);
+    } catch (e) {
+      print('❌ TTS Stop Error: $e');
+    }
   }
 
   // Removed _generateMockWords - now using API call in _startLearning
@@ -944,164 +1052,50 @@ class _VocabularyScreenState extends State<VocabularyScreen> {
                             ),
                           ),
                           const SizedBox(height: 16),
-                          // Word Card
-                          Container(
-                            width: double.infinity,
-                            decoration: BoxDecoration(
-                              color: Colors.white,
-                              borderRadius: BorderRadius.circular(16),
-                              border: Border.all(
-                                color: isLearned ? _primaryColor() : Colors.grey.shade200,
-                                width: isLearned ? 2 : 1,
-                              ),
-                              boxShadow: [
-                                BoxShadow(
-                                  color: Colors.black.withOpacity(0.05),
-                                  blurRadius: 8,
-                                  offset: const Offset(0, 2),
-                                ),
-                              ],
-                            ),
-                            child: Padding(
-                              padding: const EdgeInsets.all(20),
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Row(
-                                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                                    children: [
-                                      Expanded(
-                                        child: Column(
-                                          crossAxisAlignment: CrossAxisAlignment.start,
-                                          children: [
-                                            Text(
-                                              (currentWord['arabic'] ?? 
-                                               currentWord['word'] ?? 
-                                               currentWord['arabicWord'] ?? 
-                                               currentWord['text'] ?? 
-                                               '') as String,
-                                              style: const TextStyle(
-                                                fontSize: 28,
-                                                fontWeight: FontWeight.bold,
-                                                color: Colors.black87,
-                                              ),
-                                              textDirection: TextDirection.rtl,
-                                            ),
-                                            if ((currentWord['transliteration'] ?? 
-                                                 currentWord['pronunciation'] ?? 
-                                                 currentWord['phonetic'] ?? 
-                                                 '') as String != '' && 
-                                                (currentWord['transliteration'] ?? 
-                                                 currentWord['pronunciation'] ?? 
-                                                 currentWord['phonetic'] ?? 
-                                                 '') != 'null') ...[
-                                              const SizedBox(height: 8),
-                                              Text(
-                                                (currentWord['transliteration'] ?? 
-                                                 currentWord['pronunciation'] ?? 
-                                                 currentWord['phonetic'] ?? 
-                                                 '') as String,
-                                                style: TextStyle(
-                                                  fontSize: 16,
-                                                  color: Colors.grey.shade600,
-                                                  fontStyle: FontStyle.italic,
-                                                ),
-                                              ),
-                                            ],
-                                          ],
-                                        ),
-                                      ),
-                                      Row(
-                                        children: [
-                                          IconButton(
-                                            icon: Icon(
-                                              Icons.volume_up_outlined,
-                                              color: _primaryColor(),
-                                            ),
-                                            onPressed: () {
-                                              // TODO: Implement audio playback
-                                            },
-                                            tooltip: 'Listen',
-                                          ),
-                                          IconButton(
-                                            icon: Icon(
-                                              isSaved ? Icons.bookmark : Icons.bookmark_border,
-                                              color: isSaved ? _primaryColor() : Colors.grey.shade600,
-                                            ),
-                                            onPressed: () => _toggleSaved(wordId),
-                                            tooltip: 'Save',
-                                          ),
-                                          IconButton(
-                                            icon: Icon(
-                                              isLearned ? Icons.check_circle : Icons.check_circle_outline,
-                                              color: isLearned ? _primaryColor() : Colors.grey.shade600,
-                                            ),
-                                            onPressed: () => _toggleLearned(wordId),
-                                            tooltip: 'Mark as Learned',
-                                          ),
-                                        ],
-                                      ),
-                                    ],
-                                  ),
-                                  const SizedBox(height: 20),
-                                  Text(
-                                    'Meaning:',
-                                    style: TextStyle(
-                                      fontSize: 14,
-                                      fontWeight: FontWeight.w600,
-                                      color: Colors.grey.shade700,
-                                    ),
-                                  ),
-                                  const SizedBox(height: 8),
-                                  Text(
-                                    (currentWord['english'] ?? 
+                          // Word Card - Using new VocabularyCard widget
+                          VocabularyCard(
+                            arabicWord: (currentWord['arabic'] ?? 
+                                        currentWord['word'] ?? 
+                                        currentWord['arabicWord'] ?? 
+                                        currentWord['text'] ?? 
+                                        '') as String,
+                            transliteration: (currentWord['transliteration'] ?? 
+                                             currentWord['pronunciation'] ?? 
+                                             currentWord['phonetic'] ?? 
+                                             '') as String?,
+                            meaning: (currentWord['english'] ?? 
                                      currentWord['meaning'] ?? 
                                      currentWord['translation'] ?? 
                                      currentWord['englishWord'] ?? 
                                      '') as String,
-                                    style: const TextStyle(
-                                      fontSize: 18,
-                                      color: Colors.black87,
-                                    ),
-                                  ),
-                                  const SizedBox(height: 20),
-                                  Container(
-                                    padding: const EdgeInsets.all(16),
-                                    decoration: BoxDecoration(
-                                      color: _backgroundColor(),
-                                      borderRadius: BorderRadius.circular(12),
-                                    ),
-                                    child: Column(
-                                      crossAxisAlignment: CrossAxisAlignment.start,
-                                      children: [
-                                        Text(
-                                          'Example:',
-                                          style: TextStyle(
-                                            fontSize: 14,
-                                            fontWeight: FontWeight.w600,
-                                            color: Colors.grey.shade700,
-                                          ),
-                                        ),
-                                        const SizedBox(height: 8),
-                                        Text(
-                                          (currentWord['exampleAr'] ?? 
-                                           currentWord['example'] ?? 
-                                           currentWord['exampleSentence'] ?? 
-                                           currentWord['sentence'] ?? 
-                                           '') as String,
-                                          style: TextStyle(
-                                            fontSize: 16,
-                                            color: Colors.grey.shade800,
-                                            fontStyle: FontStyle.italic,
-                                          ),
-                                          textDirection: TextDirection.rtl,
-                                        ),
-                                      ],
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            ),
+                            exampleAr: (currentWord['exampleAr'] ?? 
+                                       currentWord['example'] ?? 
+                                       currentWord['exampleSentence'] ?? 
+                                       currentWord['sentence'] ?? 
+                                       '') as String?,
+                            exampleEn: (currentWord['exampleEn'] ?? 
+                                       currentWord['exampleEnglish'] ?? 
+                                       currentWord['exampleTranslation'] ?? 
+                                       '') as String?,
+                            isBookmarked: isSaved,
+                            isLearned: isLearned,
+                            isSpeaking: _isTtsSpeaking,
+                            onSpeak: () {
+                              if (_isTtsSpeaking) {
+                                _stopTts();
+                              } else {
+                                final arabicWord = (currentWord['arabic'] ?? 
+                                                   currentWord['word'] ?? 
+                                                   currentWord['arabicWord'] ?? 
+                                                   currentWord['text'] ?? 
+                                                   '') as String;
+                                if (arabicWord.isNotEmpty) {
+                                  _speakText(arabicWord);
+                                }
+                              }
+                            },
+                            onToggleBookmark: () => _toggleSaved(wordId),
+                            onToggleLearned: () => _toggleLearned(wordId),
                           ),
                         ],
                       ),

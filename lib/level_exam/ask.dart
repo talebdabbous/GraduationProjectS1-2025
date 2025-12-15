@@ -5,7 +5,10 @@ import '../services/auth_service.dart';
 class StartLevelPage extends StatelessWidget {
   const StartLevelPage({super.key});
 
-  static const Color kBlue = Color(0xFF1E88E5); // درجة الأزرق للأزرار
+  // ألوان من level exam و vocabulary
+  static const backgroundColor = Color(0xFFF5F1E8); // بيج فاتح
+  static const primaryColor = Color(0xFF14B8A6); // Teal
+  static const darkTealColor = Color(0xFF0D9488); // Teal غامق
 
   Future<void> _startFromZero(BuildContext context) async {
     final prefs = await SharedPreferences.getInstance();
@@ -40,6 +43,7 @@ class StartLevelPage extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
+      backgroundColor: backgroundColor,
       body: Stack(
         fit: StackFit.expand,
         children: [
@@ -84,7 +88,7 @@ class StartLevelPage extends StatelessWidget {
                     child: ElevatedButton(
                       style: ElevatedButton.styleFrom(
                         backgroundColor: Colors.white,
-                        foregroundColor: kBlue,
+                        foregroundColor: darkTealColor,
                         elevation: 0,
                         shape: RoundedRectangleBorder(
                           borderRadius: BorderRadius.circular(12),
@@ -109,7 +113,7 @@ class StartLevelPage extends StatelessWidget {
                     width: double.infinity,
                     child: ElevatedButton(
                       style: ElevatedButton.styleFrom(
-                        backgroundColor: kBlue,
+                        backgroundColor: darkTealColor,
                         foregroundColor: Colors.white,
                         elevation: 0,
                         shape: RoundedRectangleBorder(
