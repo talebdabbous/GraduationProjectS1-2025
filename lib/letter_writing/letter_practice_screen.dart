@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:google_fonts/google_fonts.dart';
 import '../widgets/handwriting_canvas.dart';
 import 'letter_writing_screen.dart';
 import '../services/letter_progress_service.dart';
@@ -24,15 +25,30 @@ class _LetterPracticeScreenState extends State<LetterPracticeScreen>
   int _currentStep = 0;
   final GlobalKey<HandwritingCanvasState> _traceCanvasKey = GlobalKey();
   final GlobalKey<HandwritingCanvasState> _writeCanvasKey = GlobalKey();
-  late AnimationController _animationController;
   bool _showTraceFeedback = false;
   bool? _writeResult;
   int _writeScore = 0;
+  late AnimationController _animationController;
 
   // ألوان من level exam و vocabulary
   static const backgroundColor = Color(0xFFF5F1E8); // بيج فاتح
   static const primaryColor = Color(0xFF14B8A6); // Teal
   static const darkTealColor = Color(0xFF0D9488); // Teal غامق
+
+  @override
+  void initState() {
+    super.initState();
+    _animationController = AnimationController(
+      vsync: this,
+      duration: const Duration(seconds: 2),
+    )..repeat();
+  }
+
+  @override
+  void dispose() {
+    _animationController.dispose();
+    super.dispose();
+  }
 
   // Helper to get letter form glyph
   String _getFormGlyph() {
@@ -100,20 +116,6 @@ class _LetterPracticeScreenState extends State<LetterPracticeScreen>
     }
   }
 
-  @override
-  void initState() {
-    super.initState();
-    _animationController = AnimationController(
-      vsync: this,
-      duration: const Duration(seconds: 2),
-    )..repeat();
-  }
-
-  @override
-  void dispose() {
-    _animationController.dispose();
-    super.dispose();
-  }
 
   void _nextStep() {
     if (_currentStep < 2) {
@@ -139,11 +141,66 @@ class _LetterPracticeScreenState extends State<LetterPracticeScreen>
 
   void _onTraceChanged() {
     final canvas = _traceCanvasKey.currentState;
-    if (canvas != null && canvas.getTotalPointCount() > 80) {
+    if (canvas == null) return;
+
+    final pointCount = canvas.getTotalPointCount();
+    final boundingBox = canvas.getBoundingBox();
+    final strokeCount = canvas.getStrokeCount();
+    final allStrokes = canvas.getAllPoints();
+
+    // Basic check: must have enough points
+    if (pointCount < 50) {
       setState(() {
-        _showTraceFeedback = true;
+        _showTraceFeedback = false;
       });
+      return;
     }
+
+    if (boundingBox == null || strokeCount == 0) {
+      setState(() {
+        _showTraceFeedback = false;
+      });
+      return;
+    }
+
+    // Simple validation: check if drawing has reasonable quality
+    final isValidDrawing = _validateLetterMatch(
+      boundingBox,
+      strokeCount,
+      pointCount,
+      widget.letter,
+      allStrokes,
+    );
+
+    setState(() {
+      _showTraceFeedback = isValidDrawing;
+    });
+  }
+
+  // Helper function to validate basic drawing quality
+  // Simple validation: just check if user drew something reasonable
+  bool _validateLetterMatch(
+    Rect boundingBox, 
+    int strokeCount, 
+    int pointCount, 
+    String targetLetter,
+    List<List<Offset>> allStrokes,
+  ) {
+    final width = boundingBox.width;
+    final height = boundingBox.height;
+
+    // Basic validation: must have reasonable size and strokes
+    if (width < 50 || height < 50 || width > 500 || height > 500) {
+      return false;
+    }
+    if (boundingBox == null || strokeCount == 0) {
+      return false;
+    }
+
+    // Simple heuristic evaluation
+    final isValidSize = width > 50 && height > 50 && width < 500 && height < 500;
+
+    return isValidSize && strokeCount > 0;
   }
 
   void _checkWrite() {
@@ -153,6 +210,7 @@ class _LetterPracticeScreenState extends State<LetterPracticeScreen>
     final pointCount = canvas.getTotalPointCount();
     final boundingBox = canvas.getBoundingBox();
     final strokeCount = canvas.getStrokeCount();
+    final allStrokes = canvas.getAllPoints();
 
     if (pointCount < 50) {
       setState(() {
@@ -170,7 +228,24 @@ class _LetterPracticeScreenState extends State<LetterPracticeScreen>
       return;
     }
 
-    // Simple heuristic evaluation
+    // Basic validation: check if drawing has reasonable quality
+    final isValidDrawing = _validateLetterMatch(
+      boundingBox, 
+      strokeCount, 
+      pointCount, 
+      widget.letter,
+      allStrokes,
+    );
+
+    if (!isValidDrawing) {
+      setState(() {
+        _writeResult = false;
+        _writeScore = 0;
+      });
+      return;
+    }
+
+    // Simple heuristic evaluation (only if letter shape is valid)
     final width = boundingBox.width;
     final height = boundingBox.height;
     final isValidSize = width > 50 && height > 50 && width < 500 && height < 500;
@@ -188,7 +263,7 @@ class _LetterPracticeScreenState extends State<LetterPracticeScreen>
         _writeScore = score;
       });
 
-      // Save progress
+      // Save progress only if letter is correct
       LetterProgressService.markFormCompleted(widget.letter, widget.form);
 
       widget.onComplete?.call();
@@ -390,6 +465,14 @@ class _LetterPracticeScreenState extends State<LetterPracticeScreen>
   }
 
   Widget _buildWatchStep() {
+    final letterGlyph = _getFormGlyph();
+    final baseLetter = widget.letter.replaceAll('ـ', '').trim();
+    final char = baseLetter.isNotEmpty ? baseLetter[baseLetter.length - 1] : widget.letter[0];
+    
+    // Check if this is Alef (ا) and any form
+    final isAlef = (char == 'ا' || char == 'أ' || char == 'إ' || char == 'آ');
+    final showAnimation = isAlef;
+    
     return Padding(
       padding: const EdgeInsets.all(20),
       child: Column(
@@ -403,20 +486,31 @@ class _LetterPracticeScreenState extends State<LetterPracticeScreen>
               borderRadius: BorderRadius.circular(20),
               border: Border.all(color: Colors.grey.shade300),
             ),
-            child: Center(
-              child: AnimatedBuilder(
-                animation: _animationController,
-                builder: (context, child) {
-                  return CustomPaint(
-                    size: const Size(200, 200),
-                    painter: _LetterAnimationPainter(
-                      letter: _getFormGlyph(),
-                      progress: _animationController.value,
+            child: showAnimation
+                ? AnimatedBuilder(
+                    animation: _animationController,
+                    builder: (context, child) {
+                      return CustomPaint(
+                        size: const Size(double.infinity, 400),
+                        painter: _LetterAnimationPainter(
+                          letter: letterGlyph,
+                          progress: _animationController.value,
+                          form: widget.form,
+                        ),
+                      );
+                    },
+                  )
+                : Center(
+                    child: Text(
+                      letterGlyph,
+                      textDirection: TextDirection.rtl,
+                      style: GoogleFonts.tajawal(
+                        fontSize: 200,
+                        fontWeight: FontWeight.bold,
+                        color: const Color(0xFF0D9488),
+                      ),
                     ),
-                  );
-                },
-              ),
-            ),
+                  ),
           ),
           const SizedBox(height: 24),
           Text(
@@ -460,7 +554,8 @@ class _LetterPracticeScreenState extends State<LetterPracticeScreen>
                   child: Center(
                     child: Text(
                       _getFormGlyph(),
-                      style: TextStyle(
+                      textDirection: TextDirection.rtl,
+                      style: GoogleFonts.tajawal(
                         fontSize: 200,
                         color: Colors.grey.shade200,
                         fontWeight: FontWeight.bold,
@@ -472,7 +567,7 @@ class _LetterPracticeScreenState extends State<LetterPracticeScreen>
                 HandwritingCanvas(
                   key: _traceCanvasKey,
                   strokeColor: darkTealColor,
-                  strokeWidth: 4.0,
+                  strokeWidth: 8.0,
                   backgroundColor: Colors.transparent,
                   borderColor: Colors.transparent,
                   onDrawingChanged: _onTraceChanged,
@@ -553,7 +648,7 @@ class _LetterPracticeScreenState extends State<LetterPracticeScreen>
                   child: HandwritingCanvas(
                     key: _writeCanvasKey,
                     strokeColor: darkTealColor,
-                    strokeWidth: 4.0,
+                    strokeWidth: 8.0,
                     hintText: _writeResult == null ? 'Write "${_getFormGlyph()}" here' : null,
                     enabled: true,
                     onDrawingChanged: () {
@@ -742,76 +837,131 @@ class _LetterPracticeScreenState extends State<LetterPracticeScreen>
   }
 }
 
-// Animation painter for letter stroke
+// Animation painter for letter stroke (خاص بحرف الألف)
 class _LetterAnimationPainter extends CustomPainter {
   final String letter;
   final double progress;
+  final LetterForm form;
 
   _LetterAnimationPainter({
     required this.letter,
     required this.progress,
+    required this.form,
   });
 
   @override
   void paint(Canvas canvas, Size size) {
-    final paint = Paint()
-      ..color = const Color(0xFF0D9488)
-      ..strokeWidth = 8
-      ..style = PaintingStyle.stroke
-      ..strokeCap = StrokeCap.round
-      ..strokeJoin = StrokeJoin.round;
-
-    // Simple placeholder animation - showing letter with animated stroke overlay
-    final textPainter = TextPainter(
+    // Draw letter outline in background (light gray - always visible)
+    final fontSize = 200.0; // نفس الحجم المستخدم في Text widget
+    final backgroundTextPainter = TextPainter(
       text: TextSpan(
         text: letter,
-        style: TextStyle(
-          fontSize: size.height * 0.6,
+        style: GoogleFonts.tajawal(
+          fontSize: fontSize,
           fontWeight: FontWeight.bold,
-          color: Colors.grey.shade300,
+          color: Colors.grey.shade300, // رمادي فاتح
         ),
       ),
       textDirection: TextDirection.rtl,
     );
-    textPainter.layout();
-    textPainter.paint(
-      canvas,
-      Offset(
-        (size.width - textPainter.width) / 2,
-        (size.height - textPainter.height) / 2,
-      ),
+    backgroundTextPainter.layout();
+    
+    final textOffset = Offset(
+      (size.width - backgroundTextPainter.width) / 2,
+      (size.height - backgroundTextPainter.height) / 2,
     );
+    
+    // Draw letter outline in background (always visible)
+    backgroundTextPainter.paint(canvas, textOffset);
 
-    // Animated stroke overlay (simple line animation)
-    final path = Path();
-    final centerX = size.width / 2;
-    final centerY = size.height / 2;
-    final radius = size.height * 0.2;
-
-    if (progress < 0.5) {
-      // Drawing first half of stroke
-      path.moveTo(centerX - radius, centerY);
-      path.lineTo(
-        centerX - radius + (radius * 2 * progress * 2),
-        centerY,
-      );
+    // Draw animated overlay based on form
+    canvas.save();
+    
+    // Calculate the letter bounds from the gray letter (our reference)
+    final letterTop = textOffset.dy;
+    final letterBottom = letterTop + backgroundTextPainter.height;
+    final letterHeight = letterBottom - letterTop;
+    final letterLeft = textOffset.dx;
+    final letterRight = letterLeft + backgroundTextPainter.width;
+    final letterWidth = letterRight - letterLeft;
+    
+    if (form == LetterForm.end) {
+      // End form (ـا): من اليمين من تحت (السكني)، ثم لليسار، ثم لأعلى
+      // نستخدم الحرف الرمادي كمرجع - نغطي المنطقة من اليمين للأسفل ثم للأعلى
+      
+      if (progress < 0.35) {
+        // الجزء الأول: السكني (الوصلة) من اليمين لليسار في الأسفل
+        final horizontalProgress = progress / 0.35;
+        final clipWidth = letterWidth * horizontalProgress;
+        final clipStartX = letterRight - clipWidth; // من اليمين
+        
+        // نغطي الجزء السفلي من الحرف (من اليمين لليسار)
+        final clipRect = Rect.fromLTWH(
+          clipStartX,
+          letterBottom - letterHeight * 0.4, // من تحت
+          clipWidth,
+          letterHeight * 0.4, // ارتفاع السكني
+        );
+        canvas.clipRect(clipRect);
+      } else {
+        // الجزء الثاني: السكني الكامل + الخط العمودي من تحت لفوق
+        final clipPath = Path();
+        final verticalProgress = (progress - 0.35) / 0.65;
+        final clipHeight = letterHeight * verticalProgress;
+        
+        // السكني الكامل (الوصلة) - من letterLeft لـ letterRight في الأسفل
+        clipPath.addRect(Rect.fromLTWH(
+          letterLeft,
+          letterBottom - letterHeight * 0.4,
+          letterWidth,
+          letterHeight * 0.4,
+        ));
+        
+        // الخط العمودي - نغطي النصف الأيمن من الحرف من الأسفل للأعلى
+        // نبدأ من مكان السكني ونرتفع لأعلى
+        clipPath.addRect(Rect.fromLTWH(
+          letterLeft + letterWidth * 0.4, // من اليمين (60% من اليمين)
+          letterBottom - clipHeight,
+          letterWidth * 0.6, // النصف الأيمن (60%)
+          clipHeight,
+        ));
+        
+        canvas.clipPath(clipPath);
+      }
     } else {
-      // Drawing second half
-      path.moveTo(centerX - radius, centerY);
-      path.lineTo(centerX + radius, centerY);
-      path.moveTo(centerX, centerY - radius);
-      path.lineTo(
-        centerX,
-        centerY - radius + (radius * 2 * (progress - 0.5) * 2),
+      // Isolated or Beginning: from top to bottom
+      // نملأ الحرف الرمادي من الأعلى للأسفل
+      final clipHeight = letterHeight * progress;
+      final clipStartY = letterTop;
+      final clipRect = Rect.fromLTWH(
+        letterLeft,
+        clipStartY,
+        letterWidth,
+        clipHeight,
       );
+      canvas.clipRect(clipRect);
     }
-
-    canvas.drawPath(path, paint);
+    
+    // Draw the letter in teal color (the animated overlay)
+    final overlayTextPainter = TextPainter(
+      text: TextSpan(
+        text: letter,
+        style: GoogleFonts.tajawal(
+          fontSize: fontSize,
+          fontWeight: FontWeight.bold,
+          color: const Color(0xFF0D9488), // Teal غامق
+        ),
+      ),
+      textDirection: TextDirection.rtl,
+    );
+    overlayTextPainter.layout();
+    overlayTextPainter.paint(canvas, textOffset);
+    
+    canvas.restore();
   }
 
   @override
   bool shouldRepaint(_LetterAnimationPainter oldDelegate) {
-    return progress != oldDelegate.progress;
+    return progress != oldDelegate.progress || letter != oldDelegate.letter;
   }
 }
-
