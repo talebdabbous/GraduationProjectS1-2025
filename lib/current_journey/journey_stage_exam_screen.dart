@@ -63,7 +63,8 @@ class _JourneyStageExamScreenState extends State<JourneyStageExamScreen> {
   final AudioPlayer _audioPlayer = AudioPlayer();
   final FlutterTts _tts = FlutterTts();
   bool _isPlayingAudio = false;
-  bool _isSpeaking = false;
+  bool _isSpeakingQuestion = false;
+  String? _speakingOptionKey; // q.id + '_' + optionKey
 
   Color get bg => const Color(0xFFF7F3E9);
   Color get accent => const Color(0xFF0D9488);
@@ -108,20 +109,48 @@ class _JourneyStageExamScreenState extends State<JourneyStageExamScreen> {
     });
   }
 
+  // ✅ إيقاف أي صوت أو TTS قيد التشغيل
+  Future<void> _stopAllAudio() async {
+    try {
+      await _audioPlayer.stop();
+    } catch (e) {
+      print('❌ Error stopping audio: $e');
+    }
+    try {
+      await _tts.stop();
+    } catch (e) {
+      print('❌ Error stopping TTS: $e');
+    }
+    if (mounted) {
+      setState(() {
+        _isPlayingAudio = false;
+        _isSpeakingQuestion = false;
+        _speakingOptionKey = null;
+      });
+    }
+  }
+
   Future<void> _initTts() async {
     await _tts.setLanguage('en-US');
     await _tts.setSpeechRate(0.45);
     await _tts.setVolume(1.0);
     await _tts.setPitch(1.0);
 
-    _tts.setStartHandler(() {
-      if (mounted) setState(() => _isSpeaking = true);
-    });
     _tts.setCompletionHandler(() {
-      if (mounted) setState(() => _isSpeaking = false);
+      if (mounted) {
+        setState(() {
+          _isSpeakingQuestion = false;
+          _speakingOptionKey = null;
+        });
+      }
     });
     _tts.setCancelHandler(() {
-      if (mounted) setState(() => _isSpeaking = false);
+      if (mounted) {
+        setState(() {
+          _isSpeakingQuestion = false;
+          _speakingOptionKey = null;
+        });
+      }
     });
   }
 
@@ -206,11 +235,18 @@ class _JourneyStageExamScreenState extends State<JourneyStageExamScreen> {
     print('🗣️ Speaking option text: ${opt.text}');
     
     try {
-      // إذا كان TTS شغال، أوقفه أولاً
-      if (_isSpeaking) {
-        await _tts.stop();
+      // أوقف أي صوت/ TTS آخر قبل البدء
+      await _stopAllAudio();
+
+      // تحديد الخيار الحالي
+      final speakKey = '${q.id}_${opt.key}';
+      if (mounted) {
+        setState(() {
+          _isSpeakingQuestion = false;
+          _speakingOptionKey = speakKey;
+        });
       }
-      
+
       // قراءة نص الخيار
       await _tts.speak(opt.text);
       print('✅ Option TTS started');
@@ -225,15 +261,6 @@ class _JourneyStageExamScreenState extends State<JourneyStageExamScreen> {
     }
   }
 
-  // ✅ إيقاف الصوت
-  Future<void> _stopAudio() async {
-    try {
-      await _audioPlayer.stop();
-      if (mounted) setState(() => _isPlayingAudio = false);
-    } catch (e) {
-      print('❌ Error stopping audio: $e');
-    }
-  }
 
   // ✅ تشغيل الصوت (audioUrl للسؤال) - مثل Level Exam
   Future<void> _playAudio() async {
@@ -243,7 +270,7 @@ class _JourneyStageExamScreenState extends State<JourneyStageExamScreen> {
     print('🎵 Attempting to play question audio from: $url');
     
     try {
-      await _stopAudio();
+      await _stopAllAudio();
       
       // تحقق من أن URL صحيح
       if (!url.startsWith('http://') && !url.startsWith('https://')) {
@@ -260,7 +287,13 @@ class _JourneyStageExamScreenState extends State<JourneyStageExamScreen> {
       await _audioPlayer.setBalance(0.0);
       
       print('🔊 Playing question audio...');
-      setState(() => _isPlayingAudio = true);
+      if (mounted) {
+        setState(() {
+          _isPlayingAudio = true;
+          _isSpeakingQuestion = false;
+          _speakingOptionKey = null;
+        });
+      }
       
       await _audioPlayer.play(UrlSource(url));
       print('✅ Question audio play command sent successfully');
@@ -278,11 +311,32 @@ class _JourneyStageExamScreenState extends State<JourneyStageExamScreen> {
 
   // ✅ TTS - قراءة السؤال
   Future<void> _speakPrompt() async {
-    if (_isSpeaking) {
-      await _tts.stop();
+    if (q.prompt.isEmpty) return;
+
+    // إذا كان يقرأ حالياً نفس السؤال → أوقف
+    if (_isSpeakingQuestion) {
+      await _stopAllAudio();
       return;
     }
-    await _tts.speak(q.prompt);
+
+    try {
+      await _stopAllAudio();
+      setState(() {
+        _isSpeakingQuestion = true;
+        _speakingOptionKey = null;
+      });
+      await _tts.speak(q.prompt);
+    } catch (e) {
+      if (mounted) {
+        setState(() {
+          _isSpeakingQuestion = false;
+          _speakingOptionKey = null;
+        });
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Failed to speak question: $e')),
+        );
+      }
+    }
   }
 
   void _select(String key) {
@@ -588,9 +642,11 @@ class _JourneyStageExamScreenState extends State<JourneyStageExamScreen> {
                         ? () => _playOptionAudio(opt)
                         : null,
                     icon: Icon(
-                      _isSpeaking ? Icons.stop_circle : Icons.volume_up,
+                      (_speakingOptionKey == '${q.id}_${opt.key}')
+                          ? Icons.stop_circle
+                          : Icons.volume_up,
                       color: opt.text.isNotEmpty
-                          ? (_isSpeaking ? Colors.red : accent)
+                          ? ((_speakingOptionKey == '${q.id}_${opt.key}') ? Colors.red : accent)
                           : Colors.grey.shade400,
                     ),
                   ),
@@ -858,8 +914,8 @@ class _JourneyStageExamScreenState extends State<JourneyStageExamScreen> {
                         IconButton(
                           onPressed: _speakPrompt,
                           icon: Icon(
-                            _isSpeaking ? Icons.stop_circle : Icons.volume_up,
-                            color: _isSpeaking ? Colors.red : accent,
+                            _isSpeakingQuestion ? Icons.stop_circle : Icons.volume_up,
+                            color: _isSpeakingQuestion ? Colors.red : accent,
                             size: 28,
                           ),
                           tooltip: 'Read question',

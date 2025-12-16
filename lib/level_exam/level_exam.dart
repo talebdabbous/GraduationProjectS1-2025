@@ -436,7 +436,18 @@ class _LevelExamScreenState extends State<LevelExamScreen> {
         backgroundColor: _backgroundColor(),
         elevation: 0,
         centerTitle: true,
-        title: const Text('Placement Test', style: TextStyle(fontWeight: FontWeight.bold)),
+        title: const Text(
+          'Placement Test',
+          style: TextStyle(fontWeight: FontWeight.bold),
+        ),
+
+        leadingWidth: 56, // عرض طبيعي للسهم
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back_ios_new),
+          onPressed: () {
+            Navigator.pushNamed(context, '/ask_level');
+          },
+        ),
       ),
       body: SafeArea(
         child: FutureBuilder<List<LevelQuestion>>(
@@ -655,9 +666,9 @@ class _LevelExamScreenState extends State<LevelExamScreen> {
                                         fit: BoxFit.cover,
                                         errorBuilder: (context, error, stackTrace) {
                                           print('❌ Image load error: $error');
-                                              return Container(
-                                                height: 200,
-                                                color: Colors.grey.shade200,
+                                          return Container(
+                                            height: 200,
+                                            color: Colors.grey.shade200,
                                             child: Column(
                                               mainAxisAlignment: MainAxisAlignment.center,
                                               children: [
@@ -673,9 +684,9 @@ class _LevelExamScreenState extends State<LevelExamScreen> {
                                             print('✅ Image loaded successfully');
                                             return child;
                                           }
-                                              return Container(
-                                                height: 200,
-                                                color: Colors.grey.shade100,
+                                          return Container(
+                                            height: 200,
+                                            color: Colors.grey.shade100,
                                             child: Center(
                                               child: CircularProgressIndicator(
                                                 value: loadingProgress.expectedTotalBytes != null
