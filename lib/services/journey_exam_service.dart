@@ -16,10 +16,26 @@ class JourneyOption {
   });
 
   factory JourneyOption.fromJson(Map<String, dynamic> json) {
+    // ✅ محاولة قراءة text من عدة أسماء محتملة
+    final key = json['key']?.toString() ?? '';
+    String text = json['text']?.toString() ?? 
+                   json['optionText']?.toString() ?? 
+                   json['label']?.toString() ?? 
+                   json['value']?.toString() ?? 
+                   '';
+    final audioUrl = json['audioUrl']?.toString();
+    
+    // ✅ Debug: طباعة البيانات للتحقق
+    print('📋 JourneyOption: key="$key", text="$text", text.isEmpty=${text.isEmpty}');
+    if (text.isEmpty) {
+      print('⚠️ WARNING: Option text is empty! JSON keys: ${json.keys.toList()}');
+      print('⚠️ Full JSON: $json');
+    }
+    
     return JourneyOption(
-      key: json['key']?.toString() ?? '',
-      text: json['text']?.toString() ?? '',
-      audioUrl: json['audioUrl']?.toString(),
+      key: key,
+      text: text,
+      audioUrl: audioUrl,
     );
   }
 }
@@ -61,10 +77,21 @@ class JourneyQuestion {
 
 class CheckAnswerResult {
   final bool correct;
-  CheckAnswerResult({required this.correct});
+  final String? correctKey; // ✅ الجواب الصحيح (key)
+  final String? correctAnswer; // ✅ الجواب الصحيح (نص)
+
+  CheckAnswerResult({
+    required this.correct,
+    this.correctKey,
+    this.correctAnswer,
+  });
 
   factory CheckAnswerResult.fromJson(Map<String, dynamic> json) {
-    return CheckAnswerResult(correct: json['correct'] == true);
+    return CheckAnswerResult(
+      correct: json['correct'] == true,
+      correctKey: json['correctKey']?.toString(),
+      correctAnswer: json['correctAnswer']?.toString(),
+    );
   }
 }
 
@@ -129,6 +156,14 @@ class JourneyExamService {
     }
 
     final body = jsonDecode(res.body) as Map<String, dynamic>;
-    return CheckAnswerResult.fromJson(body['data'] as Map<String, dynamic>);
+    
+    // ✅ Debug: طباعة الـ response من الباك
+    print('📥 Backend response: ${res.body}');
+    print('📥 Body data: ${body['data']}');
+    
+    final result = CheckAnswerResult.fromJson(body['data'] as Map<String, dynamic>);
+    print('📥 Parsed result: correct=${result.correct}, correctKey=${result.correctKey}');
+    
+    return result;
   }
 }

@@ -1,6 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../services/auth_service.dart';
+import '../services/current_journey_service.dart';
+import '../profile/profile_main_screen.dart';
+import '../current_journey/current_journey_screen.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -15,6 +18,7 @@ class _HomeScreenState extends State<HomeScreen> {
   String _userName = '';
   int _dailyStreak = 0;
   int _points = 0;
+  String? _profilePictureUrl;
 
   @override
   void initState() {
@@ -28,36 +32,50 @@ class _HomeScreenState extends State<HomeScreen> {
       final token = prefs.getString('token');
       if (token == null || token.isEmpty) return;
 
-      final res = await AuthService.getMe(token: token);
-      if (res['success'] != true) return;
+      // ✅ جلب بيانات المستخدم (للاسم وصورة البروفايل)
+      final userRes = await AuthService.getMe(token: token);
+      if (userRes['success'] != true) return;
 
-      final user = res['data'] as Map<String, dynamic>;
+      final user = userRes['data'] as Map<String, dynamic>;
+      final userName = user['name'] ?? '';
+      final profilePictureUrl = user['profilePicture']?.toString();
 
-      // 🔥 Streak
-      final streak = (user['currentStreak'] ?? 0) as int;
-
-      // ⭐ Points (XP من learningProgress حسب currentMainLevel)
+      // ✅ جلب البوينتس والستريك من Current Journey Service
+      int streak = 0;
       int points = 0;
-      final currentMainLevel = user['currentMainLevel'];
-      final progress = user['learningProgress'];
+      
+      try {
+        final journeyData = await CurrentJourneyService.fetchCurrent();
+        streak = journeyData.data.streak;
+        points = journeyData.data.points;
+      } catch (e) {
+        // إذا فشل، استخدم البيانات من getMe كـ fallback
+        streak = (user['currentStreak'] ?? 0) as int;
+        final currentMainLevel = user['currentMainLevel'];
+        final progress = user['learningProgress'];
 
-      if (progress is List && currentMainLevel is String) {
-        final item = progress.cast<dynamic>().firstWhere(
-          (e) => e is Map && e['levelId'] == currentMainLevel,
-          orElse: () => null,
-        );
+        if (progress is List && currentMainLevel is String) {
+          final item = progress.cast<dynamic>().firstWhere(
+            (e) => e is Map && e['levelId'] == currentMainLevel,
+            orElse: () => null,
+          );
 
-        if (item is Map && item['xp'] != null) {
-          points = (item['xp'] as num).toInt();
+          if (item is Map && item['xp'] != null) {
+            points = (item['xp'] as num).toInt();
+          }
         }
       }
 
+      if (!mounted) return;
+      
       setState(() {
-        _userName = user['name'] ?? '';
+        _userName = userName;
         _dailyStreak = streak;
         _points = points;
+        _profilePictureUrl = profilePictureUrl;
       });
-    } catch (_) {
+    } catch (e) {
+      print('❌ Error loading home screen data: $e');
       // تجاهل الأخطاء حالياً
     }
   }
@@ -122,10 +140,28 @@ class _HomeScreenState extends State<HomeScreen> {
                       ),
                     ),
 
-                    CircleAvatar(
-                      radius: 26,
-                      backgroundColor: Colors.white,
-                      child: Icon(Icons.person, color: primary, size: 28),
+                    GestureDetector(
+                      onTap: () async {
+                        // ✅ الانتظار للعودة من البروفايل ثم تحديث البيانات
+                        await Navigator.push(
+                          context,
+                          MaterialPageRoute(builder: (context) => const ProfileScreen()),
+                        );
+                        // ✅ تحديث البيانات عند العودة
+                        if (mounted) {
+                          _loadFromBackend();
+                        }
+                      },
+                      child: CircleAvatar(
+                        radius: 26,
+                        backgroundColor: Colors.white,
+                        backgroundImage: _profilePictureUrl != null && _profilePictureUrl!.isNotEmpty
+                            ? NetworkImage(_profilePictureUrl!)
+                            : null,
+                        child: _profilePictureUrl == null || _profilePictureUrl!.isEmpty
+                            ? Icon(Icons.person, color: primary, size: 28)
+                            : null,
+                      ),
                     )
                   ],
                 ),
@@ -143,7 +179,17 @@ class _HomeScreenState extends State<HomeScreen> {
                         children: [
                           Expanded(
                             child: GestureDetector(
-                              onTap: () => Navigator.pushNamed(context, '/current_journey_screen'),
+                              onTap: () async {
+                                // ✅ الانتظار للعودة من Current Journey ثم تحديث البيانات
+                                await Navigator.push(
+                                  context,
+                                  MaterialPageRoute(builder: (context) => const CurrentJourneyPage()),
+                                );
+                                // ✅ تحديث البيانات عند العودة
+                                if (mounted) {
+                                  _loadFromBackend();
+                                }
+                              },
                               child: _gradientCard(
                                 title: "Current Journey",
                                 subtitle: "Continue where you left off",
@@ -155,7 +201,14 @@ class _HomeScreenState extends State<HomeScreen> {
                           const SizedBox(width: 12),
                           Expanded(
                             child: GestureDetector(
-                              onTap: () => Navigator.pushNamed(context, '/letter-writing'),
+                              onTap: () async {
+                                // ✅ الانتظار للعودة من Letter Writing ثم تحديث البيانات
+                                await Navigator.pushNamed(context, '/letter-writing');
+                                // ✅ تحديث البيانات عند العودة
+                                if (mounted) {
+                                  _loadFromBackend();
+                                }
+                              },
                               child: _gradientCard(
                                 title: "Letter Writing",
                                 subtitle: "Practice Arabic letters",
@@ -210,10 +263,18 @@ class _HomeScreenState extends State<HomeScreen> {
         selectedItemColor: primary,
         unselectedItemColor: Colors.grey,
         type: BottomNavigationBarType.fixed,
-        onTap: (i) {
+        onTap: (i) async {
           if (i == 3) {
             setState(() => _index = 0);
-            Navigator.pushNamed(context, '/profile_main_screen');
+            // ✅ الانتظار للعودة من البروفايل ثم تحديث البيانات
+            await Navigator.push(
+              context,
+              MaterialPageRoute(builder: (context) => const ProfileScreen()),
+            );
+            // ✅ تحديث البيانات عند العودة
+            if (mounted) {
+              _loadFromBackend();
+            }
             return;
           }
           setState(() => _index = i);

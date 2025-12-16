@@ -169,9 +169,16 @@ class _CurrentJourneyPageState extends State<CurrentJourneyPage> {
         await precacheImage(NetworkImage(d.mapImageUrl!), context);
       }
 
+      if (!mounted) return;
+      
       setState(() {
         _selectedLevel = level;
         _data = d;
+        
+        // ✅ إذا كان المستوى المختار هو نفس المستوى الحالي، حدث _currentLevelData أيضاً
+        if (level == _currentUnlockedLevel) {
+          _currentLevelData = d;
+        }
       });
     } catch (e) {
       setState(() {
@@ -184,15 +191,17 @@ class _CurrentJourneyPageState extends State<CurrentJourneyPage> {
     if (_isLockedLevel(_selectedLevel)) return;
 
     // ✅ التحقق: يمكن الدخول على المراحل <= unlockedStage أو المراحل المكتملة مسبقاً
-    final currentUnlockedStage = _currentLevelData?.unlockedStage ?? 1;
-    final completedStages = _currentLevelData?.completedStages ?? <int>[];
+    // ✅ استخدام بيانات المستوى المختار (_data) وليس المستوى الحالي (_currentLevelData)
+    final selectedLevelData = _data;
+    final unlockedStage = selectedLevelData?.unlockedStage ?? 1;
+    final completedStages = selectedLevelData?.completedStages ?? <int>[];
     final isCompleted = completedStages.contains(stageNumber);
-    final canAccess = stageNumber <= currentUnlockedStage || isCompleted;
+    final canAccess = stageNumber <= unlockedStage || isCompleted;
     
     if (!canAccess) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text("Stage $stageNumber is locked. Unlocked stage is $currentUnlockedStage. Please complete previous stages first."),
+          content: Text("Stage $stageNumber is locked. Unlocked stage is $unlockedStage. Please complete previous stages first."),
         ),
       );
       return;
@@ -210,8 +219,36 @@ class _CurrentJourneyPageState extends State<CurrentJourneyPage> {
 
     // لو رجع true => حدّث الخريطة
     if (res == true) {
-      _loadCurrent();
-      _loadFor(_selectedLevel);
+      // ✅ حفظ المستوى القديم قبل التحديث
+      final oldLevel = _currentUnlockedLevel;
+      
+      // ✅ تحديث البيانات بشكل متوازي
+      await Future.wait([
+        _loadCurrent(),
+        _loadFor(_selectedLevel),
+      ]);
+      
+      // ✅ إذا كانت المرحلة 15 وحدثت ترقية، عرض dialog الترقية
+      if (stageNumber == 15 && mounted) {
+        final newLevel = _currentUnlockedLevel;
+        if (newLevel != oldLevel) {
+          await Future.delayed(const Duration(milliseconds: 300)); // تأخير بسيط
+          
+          if (!mounted) return;
+          
+          await showDialog(
+            context: context,
+            barrierDismissible: false,
+            builder: (context) => _LevelUpDialog(
+              newLevel: newLevel,
+              xpEarned: 50,
+              onContinue: () {
+                Navigator.of(context).pop(); // إغلاق dialog الترقية
+              },
+            ),
+          );
+        }
+      }
     }
   }
 
@@ -361,7 +398,7 @@ class _CurrentJourneyPageState extends State<CurrentJourneyPage> {
                       Row(
                         children: [
                           IconButton(
-                            onPressed: () => Navigator.pop(context),
+                            onPressed: () => Navigator.pop(context, true), // ✅ إرجاع true للإشارة إلى التحديث
                             icon: const Icon(Icons.arrow_back,
                                 color: Colors.black87),
                           ),
@@ -898,6 +935,192 @@ class _LevelNode extends StatelessWidget {
                 ),
             ],
           ),
+        ),
+      ),
+    );
+  }
+}
+
+// ✅ Dialog الترقية (Level Up)
+class _LevelUpDialog extends StatelessWidget {
+  final JourneyLevel newLevel;
+  final int xpEarned;
+  final VoidCallback onContinue;
+
+  const _LevelUpDialog({
+    required this.newLevel,
+    required this.xpEarned,
+    required this.onContinue,
+  });
+
+  Color get bg => const Color(0xFFF7F3E9);
+  
+  Color _getLevelColor(JourneyLevel level) {
+    switch (level) {
+      case JourneyLevel.beginner:
+        return const Color(0xFF2C8C99);
+      case JourneyLevel.intermediate:
+        return const Color(0xFFE9C46A);
+      case JourneyLevel.advanced:
+        return Colors.black87;
+    }
+  }
+  
+  String _getLevelName(JourneyLevel level) {
+    switch (level) {
+      case JourneyLevel.beginner:
+        return "Beginner";
+      case JourneyLevel.intermediate:
+        return "Intermediate";
+      case JourneyLevel.advanced:
+        return "Advanced";
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final accent = _getLevelColor(newLevel);
+    
+    return Dialog(
+      backgroundColor: Colors.transparent,
+      child: Container(
+        padding: const EdgeInsets.all(28),
+        decoration: BoxDecoration(
+          color: bg,
+          borderRadius: BorderRadius.circular(28),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withOpacity(0.15),
+              blurRadius: 30,
+              offset: const Offset(0, 15),
+            ),
+          ],
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            // ✅ أيقونة الترقية مع تأثير
+            Container(
+              width: 100,
+              height: 100,
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                  colors: [
+                    accent,
+                    accent.withOpacity(0.7),
+                  ],
+                ),
+                shape: BoxShape.circle,
+                boxShadow: [
+                  BoxShadow(
+                    color: accent.withOpacity(0.4),
+                    blurRadius: 20,
+                    spreadRadius: 2,
+                    offset: const Offset(0, 8),
+                  ),
+                ],
+              ),
+              child: const Icon(
+                Icons.emoji_events,
+                color: Colors.white,
+                size: 60,
+              ),
+            ),
+            const SizedBox(height: 24),
+            
+            // ✅ عنوان "مبروك"
+            const Text(
+              "مبروك!",
+              style: TextStyle(
+                fontSize: 32,
+                fontWeight: FontWeight.w900,
+                color: Colors.black87,
+              ),
+            ),
+            const SizedBox(height: 12),
+            
+            // ✅ رسالة الترقية
+            Text(
+              "Level Up!",
+              style: TextStyle(
+                fontSize: 24,
+                fontWeight: FontWeight.w900,
+                color: accent,
+              ),
+            ),
+            const SizedBox(height: 8),
+            
+            // ✅ المستوى الجديد
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+              decoration: BoxDecoration(
+                color: accent.withOpacity(0.15),
+                borderRadius: BorderRadius.circular(16),
+                border: Border.all(color: accent, width: 2),
+              ),
+              child: Text(
+                _getLevelName(newLevel),
+                style: TextStyle(
+                  fontSize: 22,
+                  fontWeight: FontWeight.w900,
+                  color: accent,
+                ),
+              ),
+            ),
+            const SizedBox(height: 24),
+            
+            // ✅ XP المكتسبة
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(16),
+                border: Border.all(color: const Color(0xFFE9C46A), width: 2),
+              ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const Icon(Icons.stars, color: Color(0xFFE9C46A), size: 32),
+                  const SizedBox(width: 12),
+                  Text(
+                    "+$xpEarned XP",
+                    style: const TextStyle(
+                      fontSize: 24,
+                      fontWeight: FontWeight.w900,
+                      color: Color(0xFFE9C46A),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 28),
+            
+            // ✅ زر المتابعة
+            SizedBox(
+              width: double.infinity,
+              child: ElevatedButton(
+                onPressed: onContinue,
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: accent,
+                  foregroundColor: Colors.white,
+                  padding: const EdgeInsets.symmetric(vertical: 16),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(999),
+                  ),
+                  elevation: 4,
+                ),
+                child: const Text(
+                  "Continue",
+                  style: TextStyle(
+                    fontSize: 18,
+                    fontWeight: FontWeight.w900,
+                  ),
+                ),
+              ),
+            ),
+          ],
         ),
       ),
     );
