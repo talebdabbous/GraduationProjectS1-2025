@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'letter_practice_screen.dart';
 import '../services/letter_progress_service.dart';
+import '../services/current_journey_service.dart';
 
 enum LetterForm {
   isolated,
@@ -32,10 +33,39 @@ class _LetterWritingScreenState extends State<LetterWritingScreen> {
   // Store progress percentage for each letter
   final Map<String, double> _letterProgress = {};
 
+  // Journey data for progress widget
+  int _userStreak = 0;
+  int _userPoints = 0;
+  String _userMainLevel = 'Beginner';
+  String _userSubLevel = 'Low';
+  bool _isLoadingJourneyData = false;
+
   @override
   void initState() {
     super.initState();
     _loadProgress();
+    _loadJourneyData();
+  }
+
+  Future<void> _loadJourneyData() async {
+    setState(() => _isLoadingJourneyData = true);
+    try {
+      final journeyData = await CurrentJourneyService.fetchCurrent();
+      if (mounted) {
+        setState(() {
+          _userStreak = journeyData.data.streak;
+          _userPoints = journeyData.data.points;
+          _userMainLevel = journeyData.data.mainLevel;
+          _userSubLevel = journeyData.data.subLevel;
+          _isLoadingJourneyData = false;
+        });
+      }
+    } catch (e) {
+      print('⚠️ Failed to load journey data: $e');
+      if (mounted) {
+        setState(() => _isLoadingJourneyData = false);
+      }
+    }
   }
 
   Future<void> _loadProgress() async {
@@ -71,39 +101,65 @@ class _LetterWritingScreenState extends State<LetterWritingScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: backgroundColor,
-      appBar: AppBar(
-        backgroundColor: backgroundColor,
-        elevation: 0,
-        title: const Text(
-          'Letter Writing',
-          style: TextStyle(
-            fontWeight: FontWeight.bold,
-            color: Colors.black87,
-          ),
-        ),
-        leading: IconButton(
-          icon: const Icon(Icons.arrow_back, color: Colors.black87),
-          onPressed: () => Navigator.pop(context),
-        ),
-      ),
       body: SafeArea(
         child: Column(
           children: [
+            // Header with Back Button and Title
+            Padding(
+              padding: const EdgeInsets.all(16),
+              child: Row(
+                children: [
+                  IconButton(
+                    onPressed: () => Navigator.pop(context),
+                    icon: const Icon(Icons.arrow_back, color: Colors.black87),
+                    padding: EdgeInsets.zero,
+                    constraints: const BoxConstraints(),
+                  ),
+                  const Expanded(
+                    child: Text(
+                      'Letter Writing',
+                      textAlign: TextAlign.center,
+                      style: TextStyle(
+                        fontSize: 20,
+                        fontWeight: FontWeight.bold,
+                        color: Colors.black87,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 48), // Balance the back button width
+                ],
+              ),
+            ),
+            const SizedBox(height: 8),
+            // Progress Widget
+            if (!_isLoadingJourneyData)
+              Padding(
+                padding: const EdgeInsets.fromLTRB(16, 0, 16, 0),
+                child: FutureBuilder<int>(
+                  future: _getCompletedCount(),
+                  builder: (context, snapshot) {
+                    final completedCount = snapshot.data ?? 0;
+                    final progressText = '$completedCount/${_letters.length}';
+                    return _LetterWritingProgressWidget(
+                      streak: _userStreak,
+                      points: _userPoints,
+                      mainLevel: _userMainLevel,
+                      subLevel: _userSubLevel,
+                      progressText: progressText,
+                      accent: darkTealColor,
+                    );
+                  },
+                ),
+              ),
+            
+            const SizedBox(height: 16),
+            
             // Top Section
             Padding(
-              padding: const EdgeInsets.all(20),
+              padding: const EdgeInsets.symmetric(horizontal: 20),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  const Text(
-                    'Letter Writing',
-                    style: TextStyle(
-                      fontSize: 28,
-                      fontWeight: FontWeight.bold,
-                      color: Colors.black87,
-                    ),
-                  ),
-                  const SizedBox(height: 8),
                   Text(
                     'Learn how to write Arabic letters step by step',
                     style: TextStyle(
@@ -111,29 +167,7 @@ class _LetterWritingScreenState extends State<LetterWritingScreen> {
                       color: Colors.grey.shade700,
                     ),
                   ),
-                  const SizedBox(height: 12),
-                  FutureBuilder<int>(
-                    future: _getCompletedCount(),
-                    builder: (context, snapshot) {
-                      final completedCount = snapshot.data ?? 0;
-                      return Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                        decoration: BoxDecoration(
-                          color: primaryColor.withOpacity(0.1),
-                          borderRadius: BorderRadius.circular(20),
-                          border: Border.all(color: primaryColor.withOpacity(0.3)),
-                        ),
-                        child: Text(
-                          '$completedCount/${_letters.length} completed',
-                          style: TextStyle(
-                            fontSize: 14,
-                            fontWeight: FontWeight.w600,
-                            color: darkTealColor,
-                          ),
-                        ),
-                      );
-                    },
-                  ),
+                  const SizedBox(height: 16),
                 ],
               ),
             ),
@@ -573,9 +607,11 @@ class _LetterWritingScreenState extends State<LetterWritingScreen> {
                   builder: (context) => LetterPracticeScreen(
                     letter: letter,
                     form: form,
-                    onComplete: () {
+                    onComplete: () async {
                       // Reload progress after completion
-                      _loadProgress();
+                      await _loadProgress();
+                      // Reload journey data to update points
+                      await _loadJourneyData();
                     },
                   ),
                 ),
@@ -676,5 +712,362 @@ class _LetterWritingScreenState extends State<LetterWritingScreen> {
   }
 }
 
+/// Progress Widget for Letter Writing Screen (without stage progress)
+class _LetterWritingProgressWidget extends StatelessWidget {
+  final int streak;
+  final int points;
+  final String mainLevel;
+  final String subLevel;
+  final String progressText;
+  final Color accent;
 
+  const _LetterWritingProgressWidget({
+    required this.streak,
+    required this.points,
+    required this.mainLevel,
+    required this.subLevel,
+    required this.progressText,
+    required this.accent,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(18),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.08),
+            blurRadius: 16,
+            offset: const Offset(0, 6),
+          ),
+        ],
+      ),
+      child: Column(
+        children: [
+          // Level Row (without stage progress on the right)
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.center,
+            children: [
+              Container(
+                width: 44,
+                height: 44,
+                decoration: BoxDecoration(
+                  color: accent.withOpacity(0.12),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Icon(Icons.school, color: accent, size: 22),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Row(
+                  children: [
+                    Flexible(
+                      child: Text(
+                        mainLevel,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(
+                          fontWeight: FontWeight.w900,
+                          fontSize: 18,
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 6),
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 8, vertical: 4),
+                      decoration: BoxDecoration(
+                        color: accent.withOpacity(0.10),
+                        borderRadius: BorderRadius.circular(999),
+                      ),
+                      child: Text(
+                        subLevel,
+                        style: TextStyle(
+                          fontWeight: FontWeight.w900,
+                          fontSize: 12,
+                          color: accent,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(width: 8),
+              _CompletedProgressIndicator(progressText: progressText),
+            ],
+          ),
+
+          const SizedBox(height: 12),
+
+          // Streak and Points Row
+          Row(
+            children: [
+              Expanded(
+                child: _LetterWritingMiniStat(
+                  icon: Icons.local_fire_department,
+                  color: accent,
+                  title: "Streak",
+                  value: "$streak",
+                  suffix: "days",
+                ),
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: _LetterWritingMiniStat(
+                  icon: Icons.star,
+                  color: const Color(0xFFE9C46A),
+                  title: "Points",
+                  value: "$points",
+                  suffix: "XP",
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _CompletedProgressIndicator extends StatefulWidget {
+  final String progressText;
+  
+  const _CompletedProgressIndicator({
+    required this.progressText,
+  });
+
+  @override
+  State<_CompletedProgressIndicator> createState() => _CompletedProgressIndicatorState();
+}
+
+class _CompletedProgressIndicatorState extends State<_CompletedProgressIndicator> 
+    with SingleTickerProviderStateMixin {
+  late AnimationController _animationController;
+  late Animation<double> _progressAnimation;
+  int _previousValue = 0;
+  
+  @override
+  void initState() {
+    super.initState();
+    _animationController = AnimationController(
+      duration: const Duration(milliseconds: 400),
+      vsync: this,
+    );
+    _progressAnimation = CurvedAnimation(
+      parent: _animationController,
+      curve: Curves.easeInOut,
+    );
+    _parseAndAnimate(widget.progressText);
+  }
+  
+  @override
+  void didUpdateWidget(_CompletedProgressIndicator oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.progressText != widget.progressText) {
+      _parseAndAnimate(widget.progressText);
+    }
+  }
+  
+  void _parseAndAnimate(String progressText) {
+    final parts = progressText.split('/');
+    final current = int.tryParse(parts[0]) ?? 0;
+    if (current != _previousValue) {
+      _previousValue = current;
+      _animationController.reset();
+      _animationController.forward();
+    }
+  }
+  
+  @override
+  void dispose() {
+    _animationController.dispose();
+    super.dispose();
+  }
+  
+  Color _getProgressColor(double percentage) {
+    if (percentage < 0.33) {
+      // Low progress - soft neutral/light green
+      return const Color(0xFF86EFAC).withOpacity(0.7);
+    } else if (percentage < 0.66) {
+      // Medium - slightly stronger green
+      return const Color(0xFF34D399).withOpacity(0.8);
+    } else {
+      // High/complete - success green
+      return const Color(0xFF10B981);
+    }
+  }
+  
+  Color _getBackgroundColor(double percentage) {
+    final progressColor = _getProgressColor(percentage);
+    return progressColor.withOpacity(0.08);
+  }
+  
+  @override
+  Widget build(BuildContext context) {
+    // Parse progress: "0/28" -> current: 0, total: 28
+    final parts = widget.progressText.split('/');
+    final current = int.tryParse(parts[0]) ?? 0;
+    final total = int.tryParse(parts[1]) ?? 28;
+    final percentage = total > 0 ? (current / total) : 0.0;
+    
+    return AnimatedBuilder(
+      animation: _progressAnimation,
+      builder: (context, child) {
+        final animatedPercentage = percentage * _progressAnimation.value;
+        final progressColor = _getProgressColor(percentage);
+        final backgroundColor = _getBackgroundColor(percentage);
+        
+        return Container(
+          height: 44, // Match graduation cap icon container height
+          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 0),
+          decoration: BoxDecoration(
+            color: backgroundColor,
+            borderRadius: BorderRadius.circular(12), // Match icon container border radius
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.center,
+            children: [
+              // Check icon in subtle colored circle
+              Container(
+                width: 20,
+                height: 20,
+                decoration: BoxDecoration(
+                  color: progressColor.withOpacity(0.2),
+                  shape: BoxShape.circle,
+                ),
+                child: Icon(
+                  Icons.check,
+                  color: progressColor,
+                  size: 12,
+                ),
+              ),
+              const SizedBox(width: 8),
+              // Progress text with animation
+              TweenAnimationBuilder<int>(
+                tween: IntTween(begin: 0, end: current),
+                duration: const Duration(milliseconds: 400),
+                curve: Curves.easeInOut,
+                builder: (context, animatedValue, child) {
+                  return Text(
+                    '$animatedValue/$total',
+                    style: const TextStyle(
+                      fontSize: 14,
+                      fontWeight: FontWeight.w700,
+                      color: Colors.black87,
+                    ),
+                  );
+                },
+              ),
+              const SizedBox(width: 8),
+              // Thin progress bar
+              SizedBox(
+                width: 35,
+                child: ClipRRect(
+                  borderRadius: BorderRadius.circular(2),
+                  child: TweenAnimationBuilder<double>(
+                    tween: Tween<double>(begin: 0.0, end: animatedPercentage),
+                    duration: const Duration(milliseconds: 400),
+                    curve: Curves.easeInOut,
+                    builder: (context, value, child) {
+                      return LinearProgressIndicator(
+                        value: value,
+                        minHeight: 3,
+                        backgroundColor: progressColor.withOpacity(0.12),
+                        valueColor: AlwaysStoppedAnimation<Color>(progressColor),
+                      );
+                    },
+                  ),
+                ),
+              ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+}
+
+class _LetterWritingMiniStat extends StatelessWidget {
+  final IconData icon;
+  final Color color;
+  final String title;
+  final String value;
+  final String suffix;
+
+  const _LetterWritingMiniStat({
+    required this.icon,
+    required this.color,
+    required this.title,
+    required this.value,
+    required this.suffix,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: color.withOpacity(0.08),
+        borderRadius: BorderRadius.circular(14),
+      ),
+      child: Row(
+        children: [
+          Container(
+            width: 36,
+            height: 36,
+            decoration: BoxDecoration(
+              color: color.withOpacity(0.15),
+              borderRadius: BorderRadius.circular(10),
+            ),
+            child: Icon(icon, color: color, size: 20),
+          ),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  title,
+                  style: TextStyle(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w600,
+                    color: Colors.grey.shade600,
+                  ),
+                ),
+                const SizedBox(height: 2),
+                Row(
+                  crossAxisAlignment: CrossAxisAlignment.baseline,
+                  textBaseline: TextBaseline.alphabetic,
+                  children: [
+                    Text(
+                      value,
+                      style: const TextStyle(
+                        fontSize: 18,
+                        fontWeight: FontWeight.w900,
+                        color: Colors.black87,
+                      ),
+                    ),
+                    const SizedBox(width: 4),
+                    Text(
+                      suffix,
+                      style: TextStyle(
+                        fontSize: 12,
+                        fontWeight: FontWeight.w600,
+                        color: Colors.grey.shade600,
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
 

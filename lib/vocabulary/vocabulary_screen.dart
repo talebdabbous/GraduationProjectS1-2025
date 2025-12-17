@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_tts/flutter_tts.dart';
 import '../services/vocabulary_service.dart';
+import '../services/current_journey_service.dart';
 import 'vocabulary_card.dart';
 
 class VocabularyScreen extends StatefulWidget {
@@ -35,6 +36,16 @@ class _VocabularyScreenState extends State<VocabularyScreen> {
   final FlutterTts _flutterTts = FlutterTts();
   bool _isTtsSpeaking = false;
 
+  // Journey data for progress widget
+  int _userStreak = 0;
+  int _userPoints = 0;
+  String _userMainLevel = 'Beginner';
+  String _userSubLevel = 'Low';
+  bool _isLoadingJourneyData = false;
+  
+  // Flag to track if points were added to avoid double counting
+  bool _pointsAdded = false;
+
   final List<Map<String, dynamic>> _categories = [
     {'label': 'Work', 'icon': Icons.work_outline},
     {'label': 'Study', 'icon': Icons.school_outlined},
@@ -55,6 +66,28 @@ class _VocabularyScreenState extends State<VocabularyScreen> {
   void initState() {
     super.initState();
     _initTts();
+    _loadJourneyData();
+  }
+  
+  Future<void> _loadJourneyData() async {
+    setState(() => _isLoadingJourneyData = true);
+    try {
+      final journeyData = await CurrentJourneyService.fetchCurrent();
+      if (mounted) {
+        setState(() {
+          _userStreak = journeyData.data.streak;
+          _userPoints = journeyData.data.points;
+          _userMainLevel = journeyData.data.mainLevel;
+          _userSubLevel = journeyData.data.subLevel;
+          _isLoadingJourneyData = false;
+        });
+      }
+    } catch (e) {
+      print('⚠️ Failed to load journey data: $e');
+      if (mounted) {
+        setState(() => _isLoadingJourneyData = false);
+      }
+    }
   }
 
   @override
@@ -339,6 +372,7 @@ class _VocabularyScreenState extends State<VocabularyScreen> {
 
     final currentState = _learnedWords.contains(wordId);
     final newState = !currentState;
+    final isNewlyLearned = !currentState && newState; // فقط عند التحويل من غير متعلم إلى متعلم
 
     // Optimistic update
     setState(() {
@@ -350,11 +384,14 @@ class _VocabularyScreenState extends State<VocabularyScreen> {
     });
 
     try {
+      // تحديث حالة الكلمة
       await VocabularyService.updateWordStatus(
         sessionId: _sessionId!,
         wordId: wordId,
         learned: newState,
       );
+      
+      // Note: Points will be added when finishing the session (5 points per learned word)
     } catch (e) {
       // Revert on error
       setState(() {
@@ -374,6 +411,72 @@ class _VocabularyScreenState extends State<VocabularyScreen> {
         );
       }
     }
+  }
+
+  void _showCompletionDialog(int learnedCount, int totalPoints) {
+    // Reset points flag when showing dialog
+    _pointsAdded = false;
+    
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => _VocabularyCompletionDialog(
+        learnedCount: learnedCount,
+        totalPoints: totalPoints,
+        onLearnMore: () async {
+          // Try to add points to backend (if endpoint exists)
+          // Note: Backend should add points automatically when finishing session
+          try {
+            print('🟢 Attempting to add $totalPoints points to backend...');
+            final result = await CurrentJourneyService.addPoints(points: totalPoints);
+            _pointsAdded = true;
+            print('✅ Points added successfully. New points: ${result.data.points}');
+            // Reload journey data to update points display
+            await _loadJourneyData();
+          } catch (e) {
+            print('⚠️ Points endpoint not available. Backend should add points automatically: $e');
+            // Don't show error to user - backend may add points automatically
+            _pointsAdded = true; // Mark as handled to prevent retry
+          }
+          
+          if (mounted) {
+            Navigator.of(context).pop(); // Close dialog
+            // Reload journey data to refresh points (in case backend added them)
+            await _loadJourneyData();
+            // Reset to setup state to start new session
+            setState(() {
+              _isSetupState = true;
+              _vocabularyWords = [];
+              _learnedWords = {};
+              _savedWords = {};
+              _currentWordIndex = 0;
+              _sessionId = null;
+            });
+          }
+        },
+        onBackToHome: () async {
+          // Try to add points to backend (if endpoint exists)
+          // Note: Backend should add points automatically when finishing session
+          try {
+            print('🟢 Attempting to add $totalPoints points to backend...');
+            final result = await CurrentJourneyService.addPoints(points: totalPoints);
+            _pointsAdded = true;
+            print('✅ Points added successfully. New points: ${result.data.points}');
+            // Reload journey data to update points display
+            await _loadJourneyData();
+          } catch (e) {
+            print('⚠️ Points endpoint not available. Backend should add points automatically: $e');
+            // Don't show error to user - backend may add points automatically
+            _pointsAdded = true; // Mark as handled to prevent retry
+          }
+          
+          if (mounted) {
+            Navigator.of(context).pop(); // Close dialog
+            Navigator.pushReplacementNamed(context, '/home_screen');
+          }
+        },
+      ),
+    );
   }
 
   Future<void> _toggleSaved(String wordId) async {
@@ -435,15 +538,44 @@ class _VocabularyScreenState extends State<VocabularyScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // Header
-          const Text(
-            'Vocabulary',
-            style: TextStyle(
-              fontSize: 32,
-              fontWeight: FontWeight.bold,
-              color: Colors.black87,
-            ),
+          // Header with Back Button and Title
+          Row(
+            children: [
+              IconButton(
+                onPressed: () => Navigator.pop(context),
+                icon: const Icon(Icons.arrow_back),
+                padding: EdgeInsets.zero,
+                constraints: const BoxConstraints(),
+              ),
+              const Expanded(
+                child: Text(
+                  'Vocabulary',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(
+                    fontSize: 20,
+                    fontWeight: FontWeight.bold,
+                    color: Colors.black87,
+                  ),
+                ),
+              ),
+              const SizedBox(width: 48), // Balance the back button width
+            ],
           ),
+          const SizedBox(height: 16),
+          
+          // Progress Widget (only in setup state)
+          if (!_isLoadingJourneyData)
+            Padding(
+              padding: const EdgeInsets.only(bottom: 24),
+              child: _VocabularyProgressWidget(
+                streak: _userStreak,
+                points: _userPoints,
+                mainLevel: _userMainLevel,
+                subLevel: _userSubLevel,
+                accent: _darkTealColor(),
+              ),
+            ),
+          
           const SizedBox(height: 8),
           const Text(
             'Choose your learning goal and number of words for today.',
@@ -988,6 +1120,16 @@ class _VocabularyScreenState extends State<VocabularyScreen> {
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
+                  IconButton(
+                    onPressed: () {
+                      setState(() {
+                        _isSetupState = true;
+                      });
+                    },
+                    icon: const Icon(Icons.arrow_back),
+                    padding: EdgeInsets.zero,
+                    constraints: const BoxConstraints(),
+                  ),
                   Expanded(
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
@@ -1219,30 +1361,37 @@ class _VocabularyScreenState extends State<VocabularyScreen> {
                           // Call finish session API
                           try {
                             final result = await VocabularyService.finishSession(_sessionId!);
-                            final learnedCount = result['learnedCount'] as int? ?? 0;
+                            final learnedCountFromApi = result['learnedCount'] as int? ?? learnedCount;
                             final savedCount = result['savedCount'] as int? ?? 0;
                             
+                            // Calculate total points earned (5 points per learned word)
+                            final totalPointsEarned = learnedCountFromApi * 5;
+                            
                             if (mounted) {
-                              ScaffoldMessenger.of(context).showSnackBar(
-                                SnackBar(
-                                  content: Text(
-                                    'Session completed! Learned: $learnedCount, Saved: $savedCount',
-                                  ),
-                                  backgroundColor: Colors.green,
-                                ),
-                              );
-                              
-                              // Navigate to home screen after showing message
-                              Navigator.pushReplacementNamed(context, '/home_screen');
+                              // Show completion dialog with points
+                              _showCompletionDialog(learnedCountFromApi, totalPointsEarned);
                             }
                           } catch (e) {
+                            // Check if session is already finished
+                            final errorMessage = e.toString().replaceFirst('Exception: ', '').toLowerCase();
+                            final isAlreadyFinished = errorMessage.contains('already finished') || 
+                                                      errorMessage.contains('already completed') ||
+                                                      errorMessage.contains('session is already');
+                            
                             if (mounted) {
-                              ScaffoldMessenger.of(context).showSnackBar(
-                                SnackBar(
-                                  content: Text(e.toString().replaceFirst('Exception: ', '')),
-                                  backgroundColor: Colors.red,
-                                ),
-                              );
+                              if (isAlreadyFinished) {
+                                // Session already finished - calculate points and show dialog
+                                final totalPointsEarned = learnedCount * 5;
+                                _showCompletionDialog(learnedCount, totalPointsEarned);
+                              } else {
+                                // Other error - show error message
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  SnackBar(
+                                    content: Text(e.toString().replaceFirst('Exception: ', '')),
+                                    backgroundColor: Colors.red,
+                                  ),
+                                );
+                              }
                             }
                           }
                         }
@@ -1356,6 +1505,351 @@ class _VocabularyScreenState extends State<VocabularyScreen> {
           label: 'Profile',
         ),
       ],
+    );
+  }
+}
+
+/// Dialog widget for vocabulary session completion
+class _VocabularyCompletionDialog extends StatelessWidget {
+  final int learnedCount;
+  final int totalPoints;
+  final VoidCallback onLearnMore;
+  final VoidCallback onBackToHome;
+
+  const _VocabularyCompletionDialog({
+    required this.learnedCount,
+    required this.totalPoints,
+    required this.onLearnMore,
+    required this.onBackToHome,
+  });
+
+  Color get bg => const Color(0xFFF7F3E9);
+  Color get accent => const Color(0xFF0D9488);
+
+  @override
+  Widget build(BuildContext context) {
+    return Dialog(
+      backgroundColor: Colors.transparent,
+      child: Container(
+        padding: const EdgeInsets.all(24),
+        decoration: BoxDecoration(
+          color: bg,
+          borderRadius: BorderRadius.circular(24),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withOpacity(0.1),
+              blurRadius: 20,
+              offset: const Offset(0, 10),
+            ),
+          ],
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            // Success icon
+            Container(
+              width: 80,
+              height: 80,
+              decoration: BoxDecoration(
+                color: const Color(0xFF10B981),
+                shape: BoxShape.circle,
+              ),
+              child: const Icon(
+                Icons.check,
+                color: Colors.white,
+                size: 50,
+              ),
+            ),
+            const SizedBox(height: 20),
+            
+            // Congratulations title
+            const Text(
+              "Congratulations!",
+              style: TextStyle(
+                fontSize: 28,
+                fontWeight: FontWeight.w900,
+                color: Colors.black87,
+              ),
+            ),
+            const SizedBox(height: 8),
+            
+            // Completion message
+            Text(
+              "You have learned $learnedCount words!",
+              textAlign: TextAlign.center,
+              style: const TextStyle(
+                fontSize: 18,
+                fontWeight: FontWeight.w700,
+                color: Colors.black87,
+              ),
+            ),
+            const SizedBox(height: 24),
+            
+            // Points earned
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(16),
+                border: Border.all(color: accent, width: 2),
+              ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(Icons.stars, color: accent, size: 28),
+                  const SizedBox(width: 12),
+                  Text(
+                    "Points Earned: $totalPoints",
+                    style: TextStyle(
+                      fontSize: 20,
+                      fontWeight: FontWeight.w900,
+                      color: accent,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 24),
+            
+            // Learn More button
+            SizedBox(
+              width: double.infinity,
+              child: ElevatedButton(
+                onPressed: onLearnMore,
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: accent,
+                  foregroundColor: Colors.white,
+                  padding: const EdgeInsets.symmetric(vertical: 14),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(999),
+                  ),
+                ),
+                child: const Text(
+                  "Learn More",
+                  style: TextStyle(fontWeight: FontWeight.w900),
+                ),
+              ),
+            ),
+            const SizedBox(height: 12),
+            
+            // Go to Home button
+            SizedBox(
+              width: double.infinity,
+              child: OutlinedButton(
+                onPressed: onBackToHome,
+                style: OutlinedButton.styleFrom(
+                  foregroundColor: accent,
+                  side: BorderSide(color: accent, width: 2),
+                  padding: const EdgeInsets.symmetric(vertical: 14),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(999),
+                  ),
+                ),
+                child: const Text(
+                  "Go to Home",
+                  style: TextStyle(fontWeight: FontWeight.w900),
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+/// Progress Widget for Vocabulary Screen (without stage progress)
+class _VocabularyProgressWidget extends StatelessWidget {
+  final int streak;
+  final int points;
+  final String mainLevel;
+  final String subLevel;
+  final Color accent;
+
+  const _VocabularyProgressWidget({
+    required this.streak,
+    required this.points,
+    required this.mainLevel,
+    required this.subLevel,
+    required this.accent,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(18),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.08),
+            blurRadius: 16,
+            offset: const Offset(0, 6),
+          ),
+        ],
+      ),
+      child: Column(
+        children: [
+          // Level Row (without stage progress on the right)
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.center,
+            children: [
+              Container(
+                width: 44,
+                height: 44,
+                decoration: BoxDecoration(
+                  color: accent.withOpacity(0.12),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Icon(Icons.school, color: accent, size: 22),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Row(
+                  children: [
+                    Flexible(
+                      child: Text(
+                        mainLevel,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(
+                          fontWeight: FontWeight.w900,
+                          fontSize: 18,
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 6),
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 8, vertical: 4),
+                      decoration: BoxDecoration(
+                        color: accent.withOpacity(0.10),
+                        borderRadius: BorderRadius.circular(999),
+                      ),
+                      child: Text(
+                        subLevel,
+                        style: TextStyle(
+                          fontWeight: FontWeight.w900,
+                          fontSize: 12,
+                          color: accent,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+
+          const SizedBox(height: 12),
+
+          // Streak and Points Row
+          Row(
+            children: [
+              Expanded(
+                child: _MiniStat(
+                  icon: Icons.local_fire_department,
+                  color: accent,
+                  title: "Streak",
+                  value: "$streak",
+                  suffix: "days",
+                ),
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: _MiniStat(
+                  icon: Icons.star,
+                  color: const Color(0xFFE9C46A),
+                  title: "Points",
+                  value: "$points",
+                  suffix: "XP",
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _MiniStat extends StatelessWidget {
+  final IconData icon;
+  final Color color;
+  final String title;
+  final String value;
+  final String suffix;
+
+  const _MiniStat({
+    required this.icon,
+    required this.color,
+    required this.title,
+    required this.value,
+    required this.suffix,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: color.withOpacity(0.08),
+        borderRadius: BorderRadius.circular(14),
+      ),
+      child: Row(
+        children: [
+          Container(
+            width: 36,
+            height: 36,
+            decoration: BoxDecoration(
+              color: color.withOpacity(0.15),
+              borderRadius: BorderRadius.circular(10),
+            ),
+            child: Icon(icon, color: color, size: 20),
+          ),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  title,
+                  style: TextStyle(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w600,
+                    color: Colors.grey.shade600,
+                  ),
+                ),
+                const SizedBox(height: 2),
+                Row(
+                  crossAxisAlignment: CrossAxisAlignment.baseline,
+                  textBaseline: TextBaseline.alphabetic,
+                  children: [
+                    Text(
+                      value,
+                      style: const TextStyle(
+                        fontSize: 18,
+                        fontWeight: FontWeight.w900,
+                        color: Colors.black87,
+                      ),
+                    ),
+                    const SizedBox(width: 4),
+                    Text(
+                      suffix,
+                      style: TextStyle(
+                        fontSize: 12,
+                        fontWeight: FontWeight.w600,
+                        color: Colors.grey.shade600,
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
     );
   }
 }

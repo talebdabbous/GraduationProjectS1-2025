@@ -134,6 +134,7 @@ class VocabularyService {
 
   /// Finish vocabulary session
   /// Returns: {learnedCount, savedCount}
+  /// Throws Exception if session is already finished or other error occurs
   static Future<Map<String, dynamic>> finishSession(String sessionId) async {
     final url = Uri.parse('$baseUrl/vocabulary/session/$sessionId/finish');
     print('📡 POST Request URL: $url');
@@ -147,12 +148,18 @@ class VocabularyService {
 
     if (response.statusCode != 200) {
       final body = json.decode(response.body);
-      final message = body['message'] ?? 'Failed to finish session';
+      final message = body['message'] ?? body['error'] ?? 'Failed to finish session';
+      
+      // Preserve the original error message for better handling in UI
       throw Exception(message);
     }
 
     final body = json.decode(response.body);
-    return body['data'] as Map<String, dynamic>;
+    // Handle both 'data' wrapper and direct response
+    if (body['data'] != null) {
+      return body['data'] as Map<String, dynamic>;
+    }
+    return body as Map<String, dynamic>;
   }
 }
 

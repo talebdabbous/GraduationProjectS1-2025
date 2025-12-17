@@ -98,6 +98,9 @@ class CurrentJourneyService {
 
   // ✅ NEW: complete stage
   static const String endpointCompleteStage = "/api/journey/complete-stage";
+  
+  // ✅ NEW: add points (for vocabulary learning)
+  static const String endpointAddPoints = "/api/journey/add-points";
 
   static Future<String?> _token() async {
     final prefs = await SharedPreferences.getInstance();
@@ -155,6 +158,32 @@ class CurrentJourneyService {
       headers: _headers(token),
       body: jsonEncode({
         "stage": stage,
+        "points": points,
+      }),
+    );
+
+    if (res.statusCode < 200 || res.statusCode >= 300) {
+      throw Exception("API error ${res.statusCode}: ${res.body}");
+    }
+
+    final json = jsonDecode(res.body) as Map<String, dynamic>;
+
+    // ✅ الباك بيرجع currentLevel + باقي الحقول (مع النقاط المحدثة)
+    return CurrentJourneyResponse.fromJson(json);
+  }
+
+  /// ✅ NEW: إضافة نقاط عند تعلم كلمة جديدة
+  /// body: { "points": عدد النقاط (5 لكل كلمة) }
+  static Future<CurrentJourneyResponse> addPoints({
+    required int points,
+  }) async {
+    final token = await _token();
+    final uri = Uri.parse("$baseUrl$endpointAddPoints");
+
+    final res = await http.post(
+      uri,
+      headers: _headers(token),
+      body: jsonEncode({
         "points": points,
       }),
     );

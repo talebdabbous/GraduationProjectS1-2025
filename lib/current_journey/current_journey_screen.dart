@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import '../services/current_journey_service.dart';
 import 'journey_stage_exam_screen.dart';
+import '../profile/profile_main_screen.dart';
+import '../Home_Screen/home_screen.dart';
 
 class CurrentJourneyPage extends StatefulWidget {
   const CurrentJourneyPage({super.key});
@@ -27,6 +29,9 @@ class _CurrentJourneyPageState extends State<CurrentJourneyPage> {
 
   // ✅ بدون لاج: نحدّث opacity بدون setState
   final ValueNotifier<double> _headerOpacity = ValueNotifier<double>(1.0);
+
+  // ✅ Bottom Navigation Bar index
+  int _bottomNavIndex = 0;
 
   static const String _fallbackAsset = "assets/images/level_map.png";
 
@@ -297,21 +302,18 @@ class _CurrentJourneyPageState extends State<CurrentJourneyPage> {
     final lockedLevel = _isLockedLevel(_selectedLevel);
     final completedLevel = _isCompletedLevel(_selectedLevel);
 
-    // ✅ حسب حالة المستوى المختار:
-    // - مقفل → "Locked"
-    // - مخلّص → "15/15"
-    // - حالي → التقدم الفعلي
+    final subLevelText = (currentData == null)
+        ? "Low"
+        : _subLevelFromUnlockedStage(currentData.unlockedStage);
+
+    // ✅ حساب progressText (عدد المراحل المنجزة من أصل 15)
     final progressText = lockedLevel
-        ? "Locked"
+        ? "0/15"
         : completedLevel
             ? "15/15"
             : (currentData == null)
                 ? "0/15"
                 : _progressText(currentData, locked: false);
-
-    final subLevelText = (currentData == null)
-        ? "Low"
-        : _subLevelFromUnlockedStage(currentData.unlockedStage);
 
     final unlockedStage = (j == null)
         ? 1
@@ -444,6 +446,40 @@ class _CurrentJourneyPageState extends State<CurrentJourneyPage> {
           ],
         ),
       ),
+      // ---------------- BOTTOM NAV ----------------
+      bottomNavigationBar: BottomNavigationBar(
+        currentIndex: _bottomNavIndex,
+        selectedItemColor: accent,
+        unselectedItemColor: Colors.grey,
+        type: BottomNavigationBarType.fixed,
+        onTap: (i) async {
+          if (i == 0) {
+            // Home: Go back to previous screen (HomeScreen)
+            Navigator.pop(context);
+            return;
+          }
+          if (i == 3) {
+            // Profile
+            setState(() => _bottomNavIndex = 0);
+            await Navigator.push(
+              context,
+              MaterialPageRoute(builder: (context) => const ProfileScreen()),
+            );
+            // Reload data when returning
+            if (mounted) {
+              _loadCurrent();
+            }
+            return;
+          }
+          setState(() => _bottomNavIndex = i);
+        },
+        items: const [
+          BottomNavigationBarItem(icon: Icon(Icons.home_outlined), label: "Home"),
+          BottomNavigationBarItem(icon: Icon(Icons.groups_outlined), label: "Community"),
+          BottomNavigationBarItem(icon: Icon(Icons.smart_toy_outlined), label: "Chatbot"),
+          BottomNavigationBarItem(icon: Icon(Icons.person_outline), label: "Profile"),
+        ],
+      ),
     );
   }
 }
@@ -510,7 +546,7 @@ class _ExpandableTopCard extends StatelessWidget {
                         overflow: TextOverflow.ellipsis,
                         style: const TextStyle(
                           fontWeight: FontWeight.w900,
-                          fontSize: 18,
+                          fontSize: 17,
                         ),
                       ),
                     ),
@@ -534,32 +570,8 @@ class _ExpandableTopCard extends StatelessWidget {
                   ],
                 ),
               ),
-
               const SizedBox(width: 8),
-
-              Container(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                decoration: BoxDecoration(
-                  color: Colors.black.withOpacity(0.04),
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Icon(Icons.check_circle,
-                        color: const Color(0xFF10B981), size: 22),
-                    const SizedBox(width: 6),
-                    Text(
-                      progressText,
-                      style: const TextStyle(
-                        fontWeight: FontWeight.w900,
-                        fontSize: 18,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
+              _JourneyProgressIndicator(progressText: progressText),
             ],
           ),
 
@@ -594,6 +606,169 @@ class _ExpandableTopCard extends StatelessWidget {
   }
 }
 
+// =========================
+// Journey Progress Indicator
+// =========================
+
+class _JourneyProgressIndicator extends StatefulWidget {
+  final String progressText;
+  
+  const _JourneyProgressIndicator({
+    required this.progressText,
+  });
+
+  @override
+  State<_JourneyProgressIndicator> createState() => _JourneyProgressIndicatorState();
+}
+
+class _JourneyProgressIndicatorState extends State<_JourneyProgressIndicator> 
+    with SingleTickerProviderStateMixin {
+  late AnimationController _animationController;
+  late Animation<double> _progressAnimation;
+  int _previousValue = 0;
+  
+  @override
+  void initState() {
+    super.initState();
+    _animationController = AnimationController(
+      duration: const Duration(milliseconds: 400),
+      vsync: this,
+    );
+    _progressAnimation = CurvedAnimation(
+      parent: _animationController,
+      curve: Curves.easeInOut,
+    );
+    _parseAndAnimate(widget.progressText);
+  }
+  
+  @override
+  void didUpdateWidget(_JourneyProgressIndicator oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.progressText != widget.progressText) {
+      _parseAndAnimate(widget.progressText);
+    }
+  }
+  
+  void _parseAndAnimate(String progressText) {
+    final parts = progressText.split('/');
+    final current = int.tryParse(parts[0]) ?? 0;
+    if (current != _previousValue) {
+      _previousValue = current;
+      _animationController.reset();
+      _animationController.forward();
+    }
+  }
+  
+  @override
+  void dispose() {
+    _animationController.dispose();
+    super.dispose();
+  }
+  
+  Color _getProgressColor(double percentage) {
+    if (percentage < 0.33) {
+      // Low progress - soft neutral/light green
+      return const Color(0xFF86EFAC).withOpacity(0.7);
+    } else if (percentage < 0.66) {
+      // Medium - slightly stronger green
+      return const Color(0xFF34D399).withOpacity(0.8);
+    } else {
+      // High/complete - success green
+      return const Color(0xFF10B981);
+    }
+  }
+  
+  Color _getBackgroundColor(double percentage) {
+    final progressColor = _getProgressColor(percentage);
+    return progressColor.withOpacity(0.08);
+  }
+  
+  @override
+  Widget build(BuildContext context) {
+    // Parse progress: "0/15" -> current: 0, total: 15
+    final parts = widget.progressText.split('/');
+    final current = int.tryParse(parts[0]) ?? 0;
+    final total = int.tryParse(parts[1]) ?? 15;
+    final percentage = total > 0 ? (current / total) : 0.0;
+    
+    return AnimatedBuilder(
+      animation: _progressAnimation,
+      builder: (context, child) {
+        final animatedPercentage = percentage * _progressAnimation.value;
+        final progressColor = _getProgressColor(percentage);
+        final backgroundColor = _getBackgroundColor(percentage);
+        
+        return Container(
+          height: 44, // Match graduation cap icon container height
+          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 0),
+          decoration: BoxDecoration(
+            color: backgroundColor,
+            borderRadius: BorderRadius.circular(12), // Match icon container border radius
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.center,
+            children: [
+              // Check icon in subtle colored circle
+              Container(
+                width: 20,
+                height: 20,
+                decoration: BoxDecoration(
+                  color: progressColor.withOpacity(0.2),
+                  shape: BoxShape.circle,
+                ),
+                child: Icon(
+                  Icons.check,
+                  color: progressColor,
+                  size: 12,
+                ),
+              ),
+              const SizedBox(width: 8),
+              // Progress text with animation
+              TweenAnimationBuilder<int>(
+                tween: IntTween(begin: 0, end: current),
+                duration: const Duration(milliseconds: 400),
+                curve: Curves.easeInOut,
+                builder: (context, animatedValue, child) {
+                  return Text(
+                    '$animatedValue/$total',
+                    style: const TextStyle(
+                      fontSize: 14,
+                      fontWeight: FontWeight.w700,
+                      color: Colors.black87,
+                    ),
+                  );
+                },
+              ),
+              const SizedBox(width: 8),
+              // Thin progress bar
+              SizedBox(
+                width: 35,
+                child: ClipRRect(
+                  borderRadius: BorderRadius.circular(2),
+                  child: TweenAnimationBuilder<double>(
+                    tween: Tween<double>(begin: 0.0, end: animatedPercentage),
+                    duration: const Duration(milliseconds: 400),
+                    curve: Curves.easeInOut,
+                    builder: (context, value, child) {
+                      return LinearProgressIndicator(
+                        value: value,
+                        minHeight: 3,
+                        backgroundColor: progressColor.withOpacity(0.12),
+                        valueColor: AlwaysStoppedAnimation<Color>(progressColor),
+                      );
+                    },
+                  ),
+                ),
+              ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+}
+
 class _MiniStat extends StatelessWidget {
   final IconData icon;
   final Color color;
@@ -612,36 +787,58 @@ class _MiniStat extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+      padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
-        color: Colors.black.withOpacity(0.03),
+        color: color.withOpacity(0.08),
         borderRadius: BorderRadius.circular(14),
       ),
       child: Row(
         children: [
           Container(
-            width: 34,
-            height: 34,
+            width: 36,
+            height: 36,
             decoration: BoxDecoration(
-              color: color.withOpacity(0.12),
+              color: color.withOpacity(0.15),
               borderRadius: BorderRadius.circular(10),
             ),
-            child: Icon(icon, color: color, size: 18),
+            child: Icon(icon, color: color, size: 20),
           ),
           const SizedBox(width: 10),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(title,
-                    style:
-                        const TextStyle(fontSize: 12, color: Colors.black54)),
-                const SizedBox(height: 2),
                 Text(
-                  "$value $suffix",
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(fontWeight: FontWeight.w900),
+                  title,
+                  style: TextStyle(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w600,
+                    color: Colors.grey.shade600,
+                  ),
+                ),
+                const SizedBox(height: 2),
+                Row(
+                  crossAxisAlignment: CrossAxisAlignment.baseline,
+                  textBaseline: TextBaseline.alphabetic,
+                  children: [
+                    Text(
+                      value,
+                      style: const TextStyle(
+                        fontSize: 18,
+                        fontWeight: FontWeight.w900,
+                        color: Colors.black87,
+                      ),
+                    ),
+                    const SizedBox(width: 4),
+                    Text(
+                      suffix,
+                      style: TextStyle(
+                        fontSize: 12,
+                        fontWeight: FontWeight.w600,
+                        color: Colors.grey.shade600,
+                      ),
+                    ),
+                  ],
                 ),
               ],
             ),

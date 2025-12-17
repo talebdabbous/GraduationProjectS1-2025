@@ -173,17 +173,22 @@ class _ProfileScreenState extends State<ProfileScreen> {
     return null;
   }
 
+  // Colors from other screens
+  Color _backgroundColor() => const Color(0xFFF5F1E8); // بيج فاتح
+  Color _primaryColor() => const Color(0xFF14B8A6); // Teal
+
   @override
   Widget build(BuildContext context) {
-    final primary = Theme.of(context).colorScheme.primary;
+    final primary = _primaryColor();
 
     return Scaffold(
-      backgroundColor: const Color(0xFFF3F5F7),
+      backgroundColor: _backgroundColor(),
       appBar: AppBar(
         title: const Text('Profile'),
         centerTitle: true,
-        backgroundColor: const Color(0xFFF3F5F7),
+        backgroundColor: _backgroundColor(),
         elevation: 0,
+        iconTheme: const IconThemeData(color: Colors.black87),
       ),
       body: SingleChildScrollView(
         child: Column(
@@ -278,6 +283,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
       bottomNavigationBar: BottomNavigationBar(
         currentIndex: _index,
         selectedItemColor: primary,
+        unselectedItemColor: Colors.grey,
         type: BottomNavigationBarType.fixed,
         onTap: (i) {
           if (i == 0) Navigator.pop(context);
@@ -287,7 +293,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
           BottomNavigationBarItem(icon: Icon(Icons.home_outlined), label: 'Home'),
           BottomNavigationBarItem(icon: Icon(Icons.groups_outlined), label: 'Community'),
           BottomNavigationBarItem(icon: Icon(Icons.smart_toy_outlined), label: 'Chatbot'),
-          BottomNavigationBarItem(icon: Icon(Icons.person), label: 'Profile'),
+          BottomNavigationBarItem(icon: Icon(Icons.person_outline), label: 'Profile'),
         ],
       ),
     );

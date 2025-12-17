@@ -243,15 +243,18 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
       );
     }
 
-    final primary = Theme.of(context).colorScheme.primary;
+    // Colors from other screens
+    final primary = const Color(0xFF14B8A6); // Teal
+    final backgroundColor = const Color(0xFFF5F1E8); // بيج فاتح
 
     return Scaffold(
-      backgroundColor: const Color(0xFFF3F5F7),
+      backgroundColor: backgroundColor,
       appBar: AppBar(
         title: const Text("Edit Profile"),
         centerTitle: true,
-        backgroundColor: const Color(0xFFF3F5F7),
+        backgroundColor: backgroundColor,
         elevation: 0,
+        iconTheme: const IconThemeData(color: Colors.black87),
       ),
       body: SafeArea(
         child: LayoutBuilder(

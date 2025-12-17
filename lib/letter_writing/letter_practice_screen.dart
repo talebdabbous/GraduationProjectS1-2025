@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
-import 'package:google_fonts/google_fonts.dart';
 import '../widgets/handwriting_canvas.dart';
 import 'letter_writing_screen.dart';
 import '../services/letter_progress_service.dart';
+import '../services/current_journey_service.dart';
 
 class LetterPracticeScreen extends StatefulWidget {
   final String letter;
@@ -48,6 +48,18 @@ class _LetterPracticeScreenState extends State<LetterPracticeScreen>
   void dispose() {
     _animationController.dispose();
     super.dispose();
+  }
+
+  /// Add points when completing a letter form
+  Future<void> _addPointsForLetterCompletion() async {
+    try {
+      // Add 10 points for completing a letter form
+      await CurrentJourneyService.addPoints(points: 10);
+      print('✅ Added 10 points for completing letter ${widget.letter} (${widget.form.name})');
+    } catch (e) {
+      print('⚠️ Failed to add points for letter completion: $e');
+      // Don't show error to user - points may be added automatically by backend
+    }
   }
 
   // Helper to get letter form glyph
@@ -265,6 +277,9 @@ class _LetterPracticeScreenState extends State<LetterPracticeScreen>
 
       // Save progress only if letter is correct
       LetterProgressService.markFormCompleted(widget.letter, widget.form);
+
+      // Add points to backend (10 points per completed letter form)
+      _addPointsForLetterCompletion();
 
       widget.onComplete?.call();
     } else {
@@ -504,10 +519,10 @@ class _LetterPracticeScreenState extends State<LetterPracticeScreen>
                     child: Text(
                       letterGlyph,
                       textDirection: TextDirection.rtl,
-                      style: GoogleFonts.tajawal(
+                      style: const TextStyle(
                         fontSize: 200,
                         fontWeight: FontWeight.bold,
-                        color: const Color(0xFF0D9488),
+                        color: Color(0xFF0D9488),
                       ),
                     ),
                   ),
@@ -555,7 +570,7 @@ class _LetterPracticeScreenState extends State<LetterPracticeScreen>
                     child: Text(
                       _getFormGlyph(),
                       textDirection: TextDirection.rtl,
-                      style: GoogleFonts.tajawal(
+                      style: TextStyle(
                         fontSize: 200,
                         color: Colors.grey.shade200,
                         fontWeight: FontWeight.bold,
@@ -856,7 +871,7 @@ class _LetterAnimationPainter extends CustomPainter {
     final backgroundTextPainter = TextPainter(
       text: TextSpan(
         text: letter,
-        style: GoogleFonts.tajawal(
+        style: TextStyle(
           fontSize: fontSize,
           fontWeight: FontWeight.bold,
           color: Colors.grey.shade300, // رمادي فاتح
@@ -946,7 +961,7 @@ class _LetterAnimationPainter extends CustomPainter {
     final overlayTextPainter = TextPainter(
       text: TextSpan(
         text: letter,
-        style: GoogleFonts.tajawal(
+        style: TextStyle(
           fontSize: fontSize,
           fontWeight: FontWeight.bold,
           color: const Color(0xFF0D9488), // Teal غامق
