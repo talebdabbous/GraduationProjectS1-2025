@@ -4,6 +4,7 @@ import '../services/auth_service.dart';
 import '../services/current_journey_service.dart';
 import '../profile/profile_main_screen.dart';
 import '../current_journey/current_journey_screen.dart';
+import '../letter_sounds/letter_sounds_screen.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -178,7 +179,7 @@ class _HomeScreenState extends State<HomeScreen> {
                       child: Row(
                         children: [
                           Expanded(
-                            child: GestureDetector(
+                            child: InkWell(
                               onTap: () async {
                                 // ✅ الانتظار للعودة من Current Journey ثم تحديث البيانات
                                 await Navigator.push(
@@ -190,6 +191,7 @@ class _HomeScreenState extends State<HomeScreen> {
                                   _loadFromBackend();
                                 }
                               },
+                              borderRadius: BorderRadius.circular(18),
                               child: _gradientCard(
                                 title: "Current Journey",
                                 subtitle: "Continue where you left off",
@@ -200,7 +202,7 @@ class _HomeScreenState extends State<HomeScreen> {
                           ),
                           const SizedBox(width: 12),
                           Expanded(
-                            child: GestureDetector(
+                            child: InkWell(
                               onTap: () async {
                                 // ✅ الانتظار للعودة من Letter Writing ثم تحديث البيانات
                                 await Navigator.pushNamed(context, '/letter-writing');
@@ -209,6 +211,7 @@ class _HomeScreenState extends State<HomeScreen> {
                                   _loadFromBackend();
                                 }
                               },
+                              borderRadius: BorderRadius.circular(18),
                               child: _gradientCard(
                                 title: "Letter Writing",
                                 subtitle: "Practice Arabic letters",
@@ -227,8 +230,9 @@ class _HomeScreenState extends State<HomeScreen> {
                       child: Row(
                         children: [
                           Expanded(
-                            child: GestureDetector(
+                            child: InkWell(
                               onTap: () => Navigator.pushNamed(context, '/vocabulary_screen'),
+                              borderRadius: BorderRadius.circular(18),
                               child: _gradientCard(
                                 title: "Vocabulary",
                                 subtitle: "Grow your word bank",
@@ -239,11 +243,22 @@ class _HomeScreenState extends State<HomeScreen> {
                           ),
                           const SizedBox(width: 12),
                           Expanded(
-                            child: _gradientCard(
-                              title: "Letter Sounds",
-                              subtitle: "Listen & recognize sounds",
-                              icon: Icons.volume_up_outlined,
-                              colors: [Colors.green, Colors.lightGreen],
+                            child: InkWell(
+                              onTap: () {
+                                Navigator.push(
+                                  context,
+                                  MaterialPageRoute(
+                                    builder: (context) => const LetterSoundsScreen(),
+                                  ),
+                                );
+                              },
+                              borderRadius: BorderRadius.circular(18),
+                              child: _gradientCard(
+                                title: "Letter Sounds",
+                                subtitle: "Listen & recognize sounds",
+                                icon: Icons.volume_up_outlined,
+                                colors: [Colors.green, Colors.lightGreen],
+                              ),
                             ),
                           ),
                         ],

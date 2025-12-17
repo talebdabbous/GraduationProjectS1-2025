@@ -19,6 +19,8 @@ import 'profile/profile_main_screen.dart';
 import 'profile/edit_profile.dart';
 import 'vocabulary/vocabulary_screen.dart';
 import 'letter_writing/letter_writing_screen.dart';
+import 'letter_sounds/letter_sounds_screen.dart';
+
 
 
 void main() {
@@ -57,6 +59,7 @@ class MyApp extends StatelessWidget {
         '/edit_profile': (_) => const EditProfileScreen(),
         '/vocabulary_screen': (_) => const VocabularyScreen(),
         '/letter-writing': (_) => const LetterWritingScreen(),
+        '/letter-sounds': (_) => const LetterSoundsScreen(),
 
         '/reset_password': (ctx) {
           final args = ModalRoute.of(ctx)!.settings.arguments as Map<String, dynamic>;
